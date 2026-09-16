@@ -1,0 +1,2347 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Open Day - ITSCG Primo Levi Seregno</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+  <!-- Libreria Grafici Statistiche -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; background: linear-gradient(135deg, #eef2ff 0%, #e0f2fe 50%, #ecfdf5 100%); overflow-x: hidden; min-height: 100vh; display: flex; flex-direction: column; }
+    h1, h2, h3, h4, .font-outfit { font-family: 'Outfit', sans-serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    
+    @keyframes driftAllAround {
+      0%, 100% { transform: translate(0px, 0px) scale(0.9) rotate(0deg); }
+      25% { transform: translate(var(--moveX), var(--moveY)) scale(1.05) rotate(90deg); }
+      50% { transform: translate(calc(var(--moveX) * -0.5), calc(var(--moveY) * 1.05)) scale(0.95) rotate(180deg); }
+      75% { transform: translate(calc(var(--moveX) * 1.1), calc(var(--moveY) * -0.5)) scale(1.08) rotate(270deg); }
+    }
+    @keyframes spinLogo { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    @keyframes pulse-fast { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+    .animate-pulse-fast { animation: pulse-fast 1s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+
+    .bubble-container { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; overflow: hidden; pointer-events: none; z-index: 0; }
+    .bubble {
+      position: absolute; background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.6) 20%, rgba(14, 165, 233, 0.25) 50%, rgba(255, 255, 255, 0) 100%);
+      border-radius: 50%; box-shadow: inset 0 0 15px rgba(255, 255, 255, 1), inset -4px -4px 12px rgba(56, 189, 248, 0.4), 0 8px 25px rgba(14, 165, 233, 0.15);
+      backdrop-filter: blur(1px); display: flex; align-items: center; justify-content: center; border: 2px solid rgba(255,255,255,0.7);
+      animation: driftAllAround var(--speed) infinite ease-in-out;
+    }
+    .bubble .bubble-logo { width: 55%; height: 55%; object-fit: contain; animation: spinLogo 20s linear infinite; opacity: 0.45; user-select: none; pointer-events: none; }
+    
+    .glass-card { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.7); box-shadow: 0 10px 30px 0 rgba(31, 38, 135, 0.05); }
+    .glass-nav { background: rgba(255, 255, 255, 0.80); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-bottom: 1px solid rgba(255, 255, 255, 0.6); }
+
+    .laser-line { position: absolute; width: 100%; height: 3px; background-color: #10b981; box-shadow: 0 0 15px #34d399, 0 0 30px #10b981; animation: laserMove 2s infinite ease-in-out; z-index: 10; }
+    @keyframes laserMove { 0%, 100% { top: 10%; } 50% { top: 90%; } }
+    
+    /* Scrollbar personalizzata per log di sistema */
+    .system-log::-webkit-scrollbar { width: 6px; }
+    .system-log::-webkit-scrollbar-track { background: #0f172a; border-radius: 10px; }
+    .system-log::-webkit-scrollbar-thumb { background-color: #334155; border-radius: 10px; }
+  </style>
+</head>
+<body class="min-h-screen text-slate-800 flex flex-col relative font-sans">
+
+  <div class="bubble-container" id="bubbleContainer"></div>
+
+  <div id="wrapperMainSite" class="flex-grow flex flex-col relative z-10">
+    <nav class="glass-nav sticky top-0 z-40 px-6 py-4 flex flex-col lg:flex-row justify-between items-center gap-4 shadow-sm">
+      <div class="flex items-center gap-4 cursor-pointer" onclick="window.navigateTo('home')">
+        <div class="relative w-12 h-12 flex items-center justify-center bg-white rounded-2xl border border-white/50 shadow-sm overflow-hidden p-1">
+          <img src="levi.png" alt="Logo" class="w-full h-full object-contain" onerror="this.onerror=null; this.outerHTML='<div class=\'w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-black\'>PL</div>';">
+        </div>
+        <div>
+          <h1 class="text-xl font-bold text-indigo-950 leading-tight">ITSCG "Primo Levi"</h1>
+          <p class="text-xs text-sky-600 font-semibold uppercase tracking-wider">Seregno (MB)</p>
+        </div> 
+      </div>
+      
+      <div class="flex flex-wrap items-center justify-center gap-2">
+        <button onclick="window.scrollToSection('datesSection')" class="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 text-sm font-bold transition"><i data-lucide="calendar" class="w-4 h-4"></i><span>Prenota Posto</span></button>
+        <button onclick="window.scrollToSection('studyPathsSection')" class="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-sm font-bold transition"><i data-lucide="graduation-cap" class="w-4 h-4"></i><span>Piani di Studio</span></button>
+        <button onclick="window.openRecoveryModal()" class="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-violet-50 hover:bg-violet-100 text-violet-700 text-sm font-bold transition"><i data-lucide="search" class="w-4 h-4"></i><span>Recupera Prenotazione</span></button>
+        <button onclick="window.openCancelModal()" class="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 text-sm font-bold transition"><i data-lucide="trash-2" class="w-4 h-4"></i><span>Annulla Prenotazione</span></button>
+        <div class="h-6 w-px bg-slate-300 mx-1 hidden lg:block"></div>
+        <button id="adminButton" onclick="window.toggleAdminPanel()" class="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-900 hover:bg-indigo-950 text-white text-sm font-bold transition shadow-sm"><i data-lucide="shield-alert" class="w-4 h-4"></i><span>Area Docenti</span></button>
+      </div>
+    </nav>
+
+    <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- SEZIONE HOME -->
+    <section id="sectionHome" class="space-y-8 flex-grow">
+      <main class="container mx-auto px-4 py-6 max-w-5xl relative z-10 space-y-8">
+        
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+          <div class="lg:col-span-7 glass-card p-6 md:p-8 rounded-3xl border border-white flex flex-col justify-center space-y-4">
+            <span class="inline-flex items-center gap-1.5 py-1 px-3 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200/50 uppercase tracking-wider self-start">Orientamento A.S. 2026/2027</span>
+            <h2 class="text-3xl font-extrabold text-indigo-950 tracking-tight leading-tight font-outfit">Disegna il tuo futuro, costruisci il tuo successo con il <span class="text-sky-600">Primo Levi</span></h2>
+            <p class="text-xs md:text-sm text-slate-600 leading-relaxed font-semibold">BENVENUTI! La partecipazione agli Open Day è riservata agli alunni di terza media e ai loro genitori. L'open day, della durata di circa 2 ore, prevede un momento informativo di presentazione dell'offerta formativa e la visita degli ambienti dell'istituto.</p>
+          </div>
+
+          <div class="lg:col-span-5 bg-gradient-to-br from-indigo-950 via-slate-900 to-indigo-900 text-white p-6 rounded-3xl flex flex-col justify-between shadow-xl space-y-4 border border-indigo-950">
+            <div class="space-y-3">
+              <h4 class="text-sm font-black uppercase text-sky-400 tracking-wider flex items-center gap-2 border-b border-white/10 pb-2"><i data-lucide="info" class="w-4 h-4"></i> Informazioni d'Istituto</h4>
+              <ul class="text-xs space-y-2.5 font-bold text-slate-200">
+                <li class="flex items-start gap-2.5"><i data-lucide="user" class="w-4 h-4 text-sky-400 shrink-0 mt-0.5"></i><span>Referente: Prof.ssa Mariagrazia Calabrese</span></li>
+                <li class="flex items-start gap-2.5"><i data-lucide="map-pin" class="w-4 h-4 text-sky-400 shrink-0 mt-0.5"></i><span>Via Briantina, 68 - 20831 Seregno (MB)</span></li>
+                <li class="flex items-start gap-2.5"><i data-lucide="mail" class="w-4 h-4 text-sky-400 shrink-0 mt-0.5"></i><span>orientamento@leviseregno.edu.it</span></li>
+                <li class="flex items-start gap-2.5"><i data-lucide="file-check-2" class="w-4 h-4 text-emerald-400 shrink-0 mt-0.5"></i><span><b>Certificati Rilasciati:</b> Validazione d'Ingresso digitale (all'arrivo) e invio automatico della <b>Pergamena Ufficiale d'Uscita</b> via email al termine dell'evento.</span></li>
+              </ul>
+            </div>
+            <div class="pt-3 border-t border-white/10 flex items-center justify-between text-[9px] text-slate-400 font-bold">
+              <span>ITSCG "Primo Levi" Seregno</span><span>Codice: MBTD430001</span>
+            </div>
+          </div>
+        </div>
+
+        <div id="datesSection" class="space-y-4 scroll-mt-20">
+          <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 border-b border-indigo-200 pb-4">
+            <div>
+              <h3 class="text-2xl font-black text-indigo-950 font-outfit">Seleziona un Giorno Disponibile</h3>
+              <p class="text-xs text-slate-500 font-bold">Iscriviti alla sessione d'indirizzo d'aula.</p>
+            </div>
+            <div class="w-full sm:w-auto">
+              <label class="text-[10px] font-bold text-indigo-800 uppercase block mb-1">Filtro Intelligente:</label>
+              <select id="userPathFilter" onchange="window.renderHomeDates()" class="w-full sm:w-64 p-2.5 border border-indigo-200 rounded-xl text-xs font-bold text-indigo-900 bg-white shadow-sm outline-none focus:ring-2 focus:ring-indigo-500">
+                <option value="all">Tutti gli indirizzi</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="groupedDatesGrid"></div>
+        </div>
+
+        <div id="studyPathsSection" class="space-y-6 pt-8 scroll-mt-24">
+          <div class="text-center md:text-left space-y-1 border-b border-slate-300 pb-3">
+            <h3 class="text-3xl font-black text-slate-900 flex items-center gap-2 justify-center md:justify-start font-outfit"><i data-lucide="book-open" class="text-indigo-600"></i> Guida Completa ai Nostri Indirizzi</h3>
+            <p class="text-xs text-slate-500 font-bold">Un'offerta formativa d'eccellenza progettata per il successo professionale e accademico.</p>
+          </div>
+          
+          <div class="glass-card p-6 rounded-2xl border border-indigo-100 shadow-sm space-y-3 bg-white/60">
+             <h4 class="font-outfit font-extrabold text-indigo-900 text-lg">IL PROFILO CULTURALE DEL PRIMO LEVI</h4>
+             <p class="text-xs text-slate-600 leading-relaxed font-semibold">L’Istituto Tecnico Statale "Primo Levi" di Seregno rappresenta un polo di eccellenza nel panorama scolastico della Brianza. Tutti i nostri percorsi sono progettati per fornire competenze solide, dinamiche e direttamente spendibili nel mondo accademico e professionale. Attraverso lo studio delle scienze, della programmazione informatica, dello studio mirato delle lingue straniere nel settore economico e dell'analisi tecnica dei flussi logistici, l'Istituto accompagna lo studente verso l'università o l'immediato inserimento in azienda.</p>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-6">
+            <div class="glass-card p-6 rounded-2xl border-l-4 border-indigo-600 shadow-sm md:col-span-2">
+              <div class="flex justify-between items-start border-b border-slate-100 pb-3">
+                <h4 class="font-outfit font-extrabold text-slate-950 text-xl">LS - Liceo Scientifico opzione Scienze Applicate e Liceo Scienze Applicate - Curvatura Economica</h4>
+                <span class="inline-block bg-indigo-100 text-indigo-800 text-[10px] font-black px-2 py-0.5 rounded ml-2">LICEO</span>
+              </div>
+              <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <h5 class="font-bold text-slate-800 text-sm">Scienze Applicate</h5>
+                  <p class="text-xs text-slate-600 mt-2 font-semibold mb-2">Incentrato sul nesso profondo tra cultura scientifico-tecnologica e tradizione umanistica. Sostituisce lo studio del latino con l'Informatica specialistica e le Scienze Sperimentali (Biologia, Chimica, Scienze della Terra, Fisica).</p>
+                  <p class="text-[11px] text-indigo-700 font-bold bg-indigo-50 p-2 rounded-lg border border-indigo-100"><b>Materie Specifiche:</b> Informatica (C++, Database, Web Design), Fisica, Chimica, Biologia.</p>
+                </div>
+                <div>
+                  <h5 class="font-bold text-slate-800 text-sm">Curvatura Economica</h5>
+                  <p class="text-xs text-slate-600 mt-2 font-semibold mb-2">Un percorso unico nel territorio che integra la solida preparazione del liceo scientifico con lo studio strutturato dell'economia e dei mercati finanziari aziendali.</p>
+                  <p class="text-[11px] text-indigo-700 font-bold bg-indigo-50 p-2 rounded-lg border border-indigo-100"><b>Materie Specifiche:</b> Economia Aziendale, Diritto ed Economia Politica, Matematica Finanziaria.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="glass-card p-6 rounded-2xl border-l-4 border-emerald-500 shadow-sm">
+              <div class="flex justify-between items-start mb-2">
+                <h4 class="font-outfit font-extrabold text-slate-950 text-lg leading-tight">RIM - Relazioni Internazionali per il Marketing</h4>
+                <span class="inline-block bg-emerald-100 text-emerald-800 text-[10px] font-black px-2 py-0.5 rounded ml-2">TECNICO</span>
+              </div>
+              <p class="text-xs text-slate-600 mt-2 font-semibold mb-3">Sviluppa competenze approfondite nel campo del business aziendale, della geopolitica e del commercio internazionale, attraverso l'apprendimento e l'uso pratico di tre lingue straniere.</p>
+              <p class="text-[10px] text-emerald-700 font-bold bg-emerald-50 p-2 rounded-md border border-emerald-100 block"><b>Materie:</b> 3 Lingue Straniere, Relazioni Internazionali, Diritto, Economia Aziendale.</p>
+            </div>
+
+            <div class="glass-card p-6 rounded-2xl border-l-4 border-orange-500 shadow-sm">
+              <div class="flex justify-between items-start mb-2">
+                <h4 class="font-outfit font-extrabold text-slate-950 text-lg leading-tight">LOG - Logistica e Trasporti</h4>
+                <span class="inline-block bg-orange-100 text-orange-800 text-[10px] font-black px-2 py-0.5 rounded ml-2">TECNICO</span>
+              </div>
+              <p class="text-xs text-slate-600 mt-2 font-semibold mb-3">Risponde alla forte richiesta del territorio di manager capaci di governare il flusso delle merci a livello intermodale (terra, aria, mare), coordinando flotte e magazzini complessi.</p>
+              <p class="text-[10px] text-orange-700 font-bold bg-orange-50 p-2 rounded-md border border-orange-100 block"><b>Materie:</b> Logistica, Diritto della Navigazione, Meccanica, Scienze della Navigazione.</p>
+            </div>
+
+            <div class="glass-card p-6 rounded-2xl border-l-4 border-teal-500 shadow-sm">
+              <div class="flex justify-between items-start mb-2">
+                <h4 class="font-outfit font-extrabold text-slate-950 text-lg leading-tight">CAT - Costruzioni, Ambiente e Territorio</h4>
+                <span class="inline-block bg-teal-100 text-teal-800 text-[10px] font-black px-2 py-0.5 rounded ml-2">TECNICO</span>
+              </div>
+              <p class="text-xs text-slate-600 mt-2 font-semibold mb-3">Evoluzione del tradizionale Geometra. Integra la pianificazione urbanistica, la bioedilizia, l'efficientamento energetico degli edifici e la tutela del territorio con moderni applicativi CAD/BIM.</p>
+              <p class="text-[10px] text-teal-700 font-bold bg-teal-50 p-2 rounded-md border border-teal-100 block"><b>Materie:</b> Progettazione e Costruzioni, Topografia, Estimo, Sicurezza nei Cantieri.</p>
+            </div>
+
+            <div class="glass-card p-6 rounded-2xl border-l-4 border-fuchsia-600 shadow-sm">
+              <div class="flex justify-between items-start mb-2">
+                <h4 class="font-outfit font-extrabold text-slate-950 text-lg leading-tight">MODA - Sistema Moda</h4>
+                <span class="inline-block bg-fuchsia-100 text-fuchsia-800 text-[10px] font-black px-2 py-0.5 rounded ml-2">TECNICO</span>
+              </div>
+              <p class="text-xs text-slate-600 mt-2 font-semibold mb-3">Unione eccellente di creatività e competenze tecniche industriali. Gestisce l'intero ciclo di vita del prodotto moda: dal design di sfilata, alla chimica dei tessuti e al marketing strategico.</p>
+              <p class="text-[10px] text-fuchsia-700 font-bold bg-fuchsia-50 p-2 rounded-md border border-fuchsia-100 block"><b>Materie:</b> Ideazione e Progettazione, Chimica dei Materiali, Tecnologie applicate ai tessuti.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="space-y-6 pt-10 border-t border-slate-200">
+          <h3 class="text-3xl font-black text-slate-900 flex items-center gap-2 font-outfit"><i data-lucide="help-circle" class="text-indigo-600"></i> Domande Frequenti</h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-5xl mx-auto">
+            <div class="glass-card border-l-4 border-indigo-400 rounded-xl bg-white shadow-sm p-5 space-y-2">
+              <h4 class="text-sm font-bold text-indigo-950">Come funziona il sistema di accoglienza con il QR Code?</h4>
+              <p class="text-xs text-slate-700 leading-relaxed font-semibold">Al momento della prenotazione riceverai via email un PDF con un QR Code univoco. Ti basterà mostrarlo sul telefono all'ingresso: i docenti lo scannerizzeranno e sarai immediatamente accreditato in aula, azzerando le file.</p>
+            </div>
+            <div class="glass-card border-l-4 border-sky-400 rounded-xl bg-white shadow-sm p-5 space-y-2">
+              <h4 class="text-sm font-bold text-sky-950">Come posso arrivare a scuola con i mezzi pubblici?</h4>
+              <p class="text-xs text-slate-700 leading-relaxed font-semibold">Il nostro polo scolastico è servito dai pullman di linea (Fermata "Via Briantina"). Inoltre, la Stazione FS di Seregno dista circa 15/20 minuti a piedi o pochi minuti con i bus urbani in coincidenza con i treni.</p>
+            </div>
+            <div class="glass-card border-l-4 border-violet-400 rounded-xl bg-white shadow-sm p-5 space-y-2">
+              <h4 class="text-sm font-bold text-violet-950">Cosa succede se perdo il mio pass o non lo trovo nella mail?</h4>
+              <p class="text-xs text-slate-700 leading-relaxed font-semibold">Non c'è problema! Clicca sul pulsante "Recupera Prenotazione" in alto, inserisci il Cognome e Nome dell'alunno, e il sistema ti re-invierà automaticamente il Pass sulla tua casella email.</p>
+            </div>
+            <div class="glass-card border-l-4 border-rose-400 rounded-xl bg-white shadow-sm p-5 space-y-2">
+              <h4 class="text-sm font-bold text-rose-950">Come faccio ad annullare la prenotazione se non posso venire?</h4>
+              <p class="text-xs text-slate-700 leading-relaxed font-semibold">Clicca su "Annulla Prenotazione" nel menu in alto. Inserendo i tuoi dati, la tua prenotazione verrà rimossa e il sistema libererà istantaneamente il posto in aula per un'altra famiglia in lista d'attesa.</p>
+            </div>
+            <div class="glass-card border-l-4 border-amber-400 rounded-xl bg-white shadow-sm p-5 space-y-2">
+              <h4 class="text-sm font-bold text-amber-950">Posso prenotare due eventi che non si sovrappongono?</h4>
+              <p class="text-xs text-slate-700 leading-relaxed font-semibold">Sì, ma per evitare blocchi del sistema, la doppia prenotazione deve essere eseguita utilizzando due account diversi (inserisci una differente e-mail del genitore per il secondo turno).</p>
+            </div>
+            <div class="glass-card border-l-4 border-emerald-400 rounded-xl bg-white shadow-sm p-5 space-y-2">
+              <h4 class="text-sm font-bold text-emerald-950">Viene rilasciato un attestato di presenza per l'Open Day?</h4>
+              <p class="text-xs text-slate-700 leading-relaxed font-semibold">Certamente. All'ingresso riceverai una convalida digitale. Al termine esatto della visita, il sistema invierà in automatico la tua "Pergamena di Partecipazione" via email da conservare o presentare alla tua scuola media.</p>
+            </div>
+          </div>
+        </div>
+      </main>
+    </section>
+
+    <!-- SEZIONE PRENOTAZIONE -->
+    <section id="sectionBooking" class="hidden flex-grow py-8 z-10">
+      <div class="container mx-auto px-4 max-w-xl">
+        <div class="glass-card p-8 rounded-3xl border border-white shadow-2xl space-y-6">
+          <div class="flex justify-between items-start border-b border-slate-200 pb-4">
+            <div>
+              <span class="inline-block py-0.5 px-2 text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 rounded uppercase tracking-widest mb-1">Ammissione Immediata</span>
+              <h3 class="text-2xl font-black text-slate-900 font-outfit">Compila i Dati</h3>
+            </div>
+            <button onclick="window.cancelBookingProcess()" class="p-2 bg-slate-100 hover:bg-rose-100 hover:text-rose-600 text-slate-500 rounded-full transition"><i data-lucide="x" class="w-5 h-5"></i></button>
+          </div>
+
+          <div class="p-4 bg-indigo-50 border border-indigo-100 rounded-2xl space-y-1">
+            <p class="text-xs font-bold text-indigo-400 uppercase tracking-widest">Stai prenotando per:</p>
+            <p class="text-indigo-900 text-lg font-black leading-tight" id="lblBookingPath"></p>
+            <p id="lblBookingDate" class="text-indigo-600 font-bold text-sm mt-1"></p>
+            <p class="text-amber-700 font-bold text-xs" id="lblBookingAula"></p>
+          </div>
+
+          <form id="bookingForm" onsubmit="window.handleBookingSubmit(event)" class="space-y-5 font-semibold text-sm text-slate-600">
+            <input type="hidden" id="formEventId">
+            <div id="openDayLiceoPreferenceBlock" class="hidden p-4 rounded-2xl border border-indigo-200 bg-indigo-50/70 space-y-2">
+              <label for="formLiceoPreference" class="text-[11px] font-black text-indigo-800 uppercase tracking-wider">Indirizzo liceale preferito *</label>
+              <select id="formLiceoPreference" class="w-full p-3 rounded-xl border border-indigo-200 bg-white outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-slate-800">
+                <option value="">Seleziona il percorso</option>
+                <option value="scienze_applicate">Liceo Scientifico - Opzione Scienze Applicate</option>
+                <option value="curvatura_economica">Liceo Scientifico - Opzione Scienze Applicate - Curvatura Economica</option>
+              </select>
+              <p class="text-[10px] text-indigo-700 font-semibold leading-relaxed">Il turno Open Day resta unico: questa scelta serve a indicare con precisione l'indirizzo liceale di interesse e viene mantenuta anche nell'eventuale lista d'attesa.</p>
+            </div>
+            <div class="grid grid-cols-2 gap-5">
+              <div class="space-y-1.5"><label class="text-[11px] font-black text-slate-500 uppercase tracking-wider">Cognome Alunno *</label><input required type="text" id="formCognome" class="w-full p-3 rounded-xl border border-slate-200 bg-white outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Es. Rossi"></div>
+              <div class="space-y-1.5"><label class="text-[11px] font-black text-slate-500 uppercase tracking-wider">Nome Alunno *</label><input required type="text" id="formNome" class="w-full p-3 rounded-xl border border-slate-200 bg-white outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Es. Mario"></div>
+            </div>
+            <div class="grid grid-cols-2 gap-5">
+              <div class="space-y-1.5"><label class="text-[11px] font-black text-slate-500 uppercase tracking-wider">Scuola Provenienza *</label><input required type="text" id="formProvenienza" class="w-full p-3 rounded-xl border border-slate-200 bg-white outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Es. Media Seregno"></div>
+              <div class="space-y-1.5"><label class="text-[11px] font-black text-slate-500 uppercase tracking-wider">E-mail Genitore *</label><input required type="email" id="formEmail" class="w-full p-3 rounded-xl border border-slate-200 bg-white outline-none focus:ring-2 focus:ring-indigo-500" placeholder="genitore@email.it"></div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-5 p-4 border border-slate-200 rounded-2xl bg-slate-50/50">
+              <div class="space-y-1.5"><label class="text-[11px] font-black text-slate-500 uppercase tracking-wider">N° Alunni *</label><input required type="number" min="1" max="5" id="formNumAlunni" class="w-full p-3 rounded-xl border border-slate-200 bg-white outline-none focus:ring-2 focus:ring-indigo-500 font-bold" value="1" oninput="window.recalcTotalSeats()"></div>
+              <div class="space-y-1.5"><label class="text-[11px] font-black text-slate-500 uppercase tracking-wider">N° Accompagnatori *</label><input required type="number" min="0" max="8" id="formNumAccompagnatori" class="w-full p-3 rounded-xl border border-slate-200 bg-white outline-none focus:ring-2 focus:ring-indigo-500 font-bold" value="1" oninput="window.recalcTotalSeats()"></div>
+              <div class="col-span-2 text-right text-xs text-slate-500 font-bold border-t border-slate-200 pt-2 mt-1">Posti totali riservati: <span id="lblTotalFormSeats" class="text-indigo-600 text-lg font-black ml-2">2</span></div>
+            </div>
+
+            <div class="p-4 bg-violet-50 border border-violet-200 rounded-xl flex items-start gap-3 shadow-sm">
+              <input type="checkbox" id="formInclusione" class="w-5 h-5 rounded text-violet-600 focus:ring-violet-500 mt-0.5 border-slate-300">
+              <label for="formInclusione" class="text-[11px] text-slate-700 leading-relaxed cursor-pointer"><strong>Richiesta Colloquio Inclusione:</strong> Spunta questa casella se desideri avere un colloquio privato con i docenti di sostegno e i referenti inclusione al termine dell'evento.</label>
+            </div>
+            
+            <div id="bookingProgressContainer" class="hidden w-full bg-slate-200 rounded-full h-2.5 mt-2">
+              <div id="bookingProgressBar" class="bg-indigo-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+              <p id="bookingProgressText" class="text-[10px] text-center mt-1 text-slate-500 font-bold uppercase tracking-wider">Attendere...</p>
+            </div>
+
+            <div class="pt-4 flex flex-col sm:flex-row gap-3">
+              <button type="button" id="btnCancelBooking" onclick="window.cancelBookingProcess()" class="w-full sm:w-1/3 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-sm transition">Indietro</button>
+              <button type="submit" id="btnSubmitBooking" class="w-full sm:w-2/3 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-black rounded-xl text-sm uppercase tracking-widest shadow-xl transition flex items-center justify-center gap-2">
+                <i data-lucide="check-circle" class="w-5 h-5"></i> Conferma Iscrizione
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- SEZIONE CONFERMA -->
+    <section id="sectionConfirmation" class="hidden flex-grow py-12 z-10">
+      <div class="container mx-auto px-4 max-w-lg">
+        <div class="glass-card rounded-3xl border border-slate-200 overflow-hidden shadow-2xl space-y-4">
+          <div class="bg-gradient-to-tr from-emerald-500 to-teal-600 p-8 text-white text-center space-y-3 relative">
+            <div class="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto shadow-inner"><i data-lucide="check" class="w-8 h-8 text-white"></i></div>
+            <h3 class="text-3xl font-black font-outfit">Prenotazione Confermata!</h3>
+            <p class="text-sm text-emerald-50 font-semibold" id="confirmationEmailStatus">L'iscrizione è immediata. L'e-mail di riepilogo è in arrivo.</p>
+          </div>
+          <div class="p-8 space-y-6">
+            <div class="border border-slate-200 rounded-2xl p-6 bg-white space-y-4 shadow-sm text-slate-700 text-center relative overflow-hidden">
+               <div class="absolute top-0 left-0 w-full h-1 bg-indigo-500"></div>
+              <h4 class="font-outfit font-black text-slate-900 text-2xl uppercase" id="ticketStudent"></h4>
+              <p class="font-mono text-2xl font-black text-indigo-600 bg-indigo-50 inline-block px-4 py-1 rounded-lg border border-indigo-100" id="ticketCode"></p>
+              <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-sm mt-4">
+                <p id="ticketPath" class="font-bold text-slate-800"></p>
+                <p id="ticketDate" class="text-slate-500 mt-1 font-semibold"></p>
+              </div>
+            </div>
+            <div class="flex flex-col gap-3">
+              <button onclick="window.downloadTicketPDF()" class="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-black rounded-xl transition flex items-center justify-center gap-2 text-sm shadow-xl uppercase tracking-wider">
+                <i data-lucide="download" class="w-5 h-5"></i><span>Scarica il Pass PDF</span>
+              </button>
+              <button onclick="window.resetAndGoHome()" class="w-full py-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition text-sm flex items-center justify-center gap-2 uppercase tracking-wider">
+                <i data-lucide="home" class="w-4 h-4"></i><span>Torna alla Home</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- AREA DOCENTI LOGIN -->
+    <section id="sectionLogin" class="hidden max-w-sm mx-auto my-auto p-8 glass-card rounded-3xl shadow-xl space-y-5 border border-slate-200 z-10 relative">
+      <div class="text-center">
+        <div class="w-16 h-16 bg-indigo-50 border border-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4"><i data-lucide="shield" class="w-8 h-8 text-indigo-600"></i></div>
+        <h3 class="text-2xl font-black text-slate-950 font-outfit">Accesso Docenti</h3>
+        <p class="text-xs text-slate-500 mt-2 font-bold">Autenticati per gestire le iscrizioni.</p>
+      </div>
+      <form onsubmit="window.handleAdminLogin(event)" class="space-y-4 pt-2">
+        <input required type="password" id="adminPasswordInput" class="w-full p-4 rounded-xl border border-slate-200 bg-white text-center font-bold tracking-widest focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Password" value="admin">
+        <button type="submit" class="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-black rounded-xl text-sm uppercase tracking-widest shadow-md transition">Accedi alla Dashboard</button>
+      </form>
+    </section>
+
+    <!-- DASHBOARD DOCENTI AVANZATA -->
+    <section id="sectionAdmin" class="hidden container mx-auto px-4 py-8 max-w-[1400px] space-y-6 flex-grow z-10 relative">
+      
+      <!-- Alert Quota Email Reached -->
+      <div id="adminQuotaAlert" class="hidden bg-orange-100 border-l-4 border-orange-500 text-orange-700 p-4 rounded shadow-sm mb-4">
+        <div class="flex items-center gap-2 font-bold">
+          <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+          <span>Limite Invio Email Google Raggiunto! (100/giorno). Le nuove iscrizioni e gli ingressi verranno salvati in coda per evitare blocchi al sistema.</span>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap justify-between items-center gap-4 border-b border-slate-200 pb-4">
+        <h2 class="text-2xl font-black text-slate-900 font-outfit flex items-center gap-2"><i data-lucide="layout-dashboard" class="text-indigo-600"></i> Dashboard Docenti</h2>
+        <div class="flex flex-wrap gap-2">
+          <button onclick="window.switchAdminTab('tabRegistrations')" class="px-5 py-2.5 bg-indigo-600 text-white font-bold rounded-xl text-xs shadow-sm uppercase tracking-wider">Registro</button>
+          <button onclick="window.switchAdminTab('tabSmartEmail')" class="px-4 py-2.5 bg-slate-800 text-white font-bold rounded-xl text-xs shadow-sm uppercase tracking-wider flex items-center gap-1.5"><i data-lucide="cpu" class="w-4 h-4 text-emerald-400"></i> Motore E-mail</button>
+          <button onclick="window.switchAdminTab('tabLiveScanner')" class="px-5 py-2.5 bg-slate-200 text-slate-800 font-bold rounded-xl text-xs shadow-sm uppercase tracking-wider">Scanner Tel.</button>
+          <button onclick="window.switchAdminTab('tabSettings')" class="px-5 py-2.5 bg-slate-200 text-slate-800 font-bold rounded-xl text-xs shadow-sm uppercase tracking-wider">Impostazioni</button>
+          <button onclick="window.switchAdminTab('tabStatistics')" class="px-5 py-2.5 bg-slate-200 text-slate-800 font-bold rounded-xl text-xs shadow-sm uppercase tracking-wider">Statistiche</button>
+          <button onclick="window.logoutAdmin()" class="px-4 py-2.5 bg-rose-100 hover:bg-rose-200 text-rose-700 font-bold rounded-xl text-xs shadow-sm ml-4 transition" title="Esci"><i data-lucide="log-out" class="w-4 h-4"></i></button>
+        </div>
+      </div>
+
+      <!-- TAB: MOTORE E-MAIL AUTOMATICO (SMART QUEUE) -->
+      <div id="tabSmartEmail" class="hidden space-y-6">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          <!-- Stato Sistema -->
+          <div class="glass-card p-6 rounded-3xl border border-slate-200 shadow-sm bg-white col-span-1 flex flex-col justify-between">
+            <div>
+              <div class="flex justify-between items-start mb-4">
+                <h4 class="font-outfit font-black text-indigo-950 text-lg flex items-center gap-2"><i data-lucide="activity" class="text-indigo-600 w-5 h-5"></i> Stato Sistema</h4>
+                <div id="engineStatusIndicator" class="flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase border border-emerald-200">
+                  <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse-fast"></div> Attivo
+                </div>
+              </div>
+              
+              <div class="space-y-4">
+                <div>
+                  <div class="flex justify-between text-xs font-bold text-slate-500 mb-1">
+                    <span>Quota E-mail Google (Oggi)</span>
+                    <span id="aiQuotaText" class="text-indigo-700">0 / 100</span>
+                  </div>
+                  <div class="w-full bg-slate-100 rounded-full h-2.5">
+                    <div id="aiQuotaBar" class="bg-indigo-500 h-2.5 rounded-full transition-all duration-500" style="width: 0%"></div>
+                  </div>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-3 pt-2">
+                  <div class="bg-slate-50 border border-slate-100 p-3 rounded-xl text-center">
+                    <span class="block text-[9px] font-black text-slate-400 uppercase">Da Inviare (In Coda)</span>
+                    <span class="block text-xl font-black text-amber-600" id="aiQueueTotal">0</span>
+                  </div>
+                  <div class="bg-slate-50 border border-slate-100 p-3 rounded-xl text-center">
+                    <span class="block text-[9px] font-black text-slate-400 uppercase">Timer Aggiornamento</span>
+                    <span class="block text-xl font-black text-emerald-600" id="aiTimerTotal">30s</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="mt-4 pt-4 border-t border-slate-100">
+               <p class="text-[10px] text-slate-500 font-bold leading-relaxed">Il motore intelligente elabora automaticamente le code ogni 30 secondi, preservando la quota giornaliera di Gmail. Tieni questa dashboard aperta per l'invio asincrono.</p>
+            </div>
+          </div>
+
+          <!-- Dettaglio Code & Log -->
+          <div class="glass-card p-6 rounded-3xl border border-slate-200 shadow-sm bg-white col-span-1 lg:col-span-2">
+            <h4 class="font-outfit font-black text-indigo-950 text-lg flex items-center gap-2 mb-4 border-b border-slate-100 pb-2"><i data-lucide="layers" class="text-indigo-600 w-5 h-5"></i> Code Prioritarie e Logs</h4>
+            
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+              <div class="border border-rose-200 bg-rose-50 p-3 rounded-2xl relative overflow-hidden">
+                <div class="absolute top-0 left-0 w-1 h-full bg-rose-500"></div>
+                <div class="flex justify-between items-center mb-1">
+                  <span class="text-[10px] font-black text-rose-800 uppercase tracking-wider">Q1 (Booking)</span>
+                  <span class="text-base font-black text-rose-600" id="q1Count">0</span>
+                </div>
+              </div>
+              <div class="border border-amber-200 bg-amber-50 p-3 rounded-2xl relative overflow-hidden">
+                <div class="absolute top-0 left-0 w-1 h-full bg-amber-500"></div>
+                <div class="flex justify-between items-center mb-1">
+                  <span class="text-[10px] font-black text-amber-800 uppercase tracking-wider">Q2 (Promo)</span>
+                  <span class="text-base font-black text-amber-600" id="q2Count">0</span>
+                </div>
+              </div>
+              <div class="border border-emerald-200 bg-emerald-50 p-3 rounded-2xl relative overflow-hidden">
+                <div class="absolute top-0 left-0 w-1 h-full bg-emerald-500"></div>
+                <div class="flex justify-between items-center mb-1">
+                  <span class="text-[10px] font-black text-emerald-800 uppercase tracking-wider">Q3 (Pergamene)</span>
+                  <span class="text-base font-black text-emerald-600" id="q3Count">0</span>
+                </div>
+              </div>
+            </div>
+            
+            <div class="border border-slate-800 bg-[#0f172a] p-4 rounded-2xl flex flex-col h-40">
+               <div class="flex justify-between items-center mb-2 pb-2 border-b border-slate-700">
+                 <span class="text-[10px] font-black text-slate-400 uppercase tracking-wider flex items-center gap-1"><i data-lucide="terminal" class="w-3 h-3"></i> System Operations Log</span>
+                 <button onclick="window.SmartEmailEngine.flushNow()" class="text-[9px] bg-slate-700 hover:bg-slate-600 text-white px-2 py-1 rounded font-bold uppercase transition">Forza Esecuzione Ora</button>
+               </div>
+               <div id="engineConsoleLog" class="system-log flex-grow overflow-y-auto text-[10px] font-mono text-emerald-400 space-y-1.5 scroll-smooth">
+                  <div><span class="text-slate-500">[--:--:--]</span> Sistema pronto. In attesa di dati...</div>
+               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB REGISTRAZIONI -->
+      <div id="tabRegistrations" class="space-y-4 hidden">
+        <div class="flex justify-between items-center">
+          <button onclick="window.exportToExcel()" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black shadow-sm flex items-center gap-2 uppercase tracking-wider transition"><i data-lucide="download" class="w-4 h-4"></i> Esporta CSV</button>
+          <select id="filterDateSelect" onchange="window.renderRegistrations()" class="p-2.5 border border-slate-200 rounded-xl text-xs font-bold shadow-sm outline-none bg-white text-slate-700"></select>
+        </div>
+        <div class="overflow-x-auto bg-white/90 backdrop-blur-md border border-slate-200 rounded-2xl shadow-sm">
+          <table class="w-full text-left text-xs whitespace-nowrap">
+            <thead>
+              <tr class="bg-slate-50 text-slate-500 border-b border-slate-200 uppercase tracking-wider font-black">
+                <th class="p-4">Codice & Stato</th>
+                <th class="p-4">Alunno</th>
+                <th class="p-4">Genitore & Posti</th>
+                <th class="p-4">Turno d'Incontro</th>
+                <th class="p-4 text-center">Inclusione</th>
+                <th class="p-4 text-center">Cambia Stato</th>
+                <th class="p-4">Invia Comunicazioni / E-Mail</th>
+                <th class="p-4 text-right">Azioni</th>
+              </tr>
+            </thead>
+            <tbody id="registrationsTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- TAB LIVE SCANNER -->
+      <div id="tabLiveScanner" class="hidden space-y-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div class="glass-card p-8 rounded-3xl border border-slate-200 shadow-md text-center flex flex-col justify-center items-center bg-white">
+            <h3 class="text-xl font-black text-indigo-950 mb-2 font-outfit">Collega Scanner Portatile</h3>
+            <p class="text-xs text-slate-500 font-bold mb-6">Inquadra questo QR Code con la fotocamera del tuo cellulare per trasformarlo in un lettore di pass senza fili.</p>
+            <div class="bg-white p-4 inline-block rounded-2xl border border-slate-200 shadow-sm"><canvas id="companionScannerQrCanvas"></canvas></div>
+          </div>
+          
+          <div class="glass-card p-6 rounded-3xl border border-slate-200 shadow-md bg-white">
+            <h4 class="text-lg font-black text-indigo-950 font-outfit mb-4 border-b border-slate-100 pb-2 flex items-center gap-2"><i data-lucide="smartphone" class="w-5 h-5 text-indigo-600"></i> Dispositivi Connessi Live</h4>
+            <div class="overflow-hidden rounded-xl border border-slate-200 bg-white">
+              <table class="w-full text-left text-xs">
+                <thead><tr class="bg-slate-50 text-slate-500 border-b font-bold"><th class="p-3">ID Dispositivo</th><th class="p-3">Stato</th><th class="p-3 text-center">Pass Scansionati</th></tr></thead>
+                <tbody id="connectedDevicesTableBody"><tr><td colspan="3" class="p-4 text-center text-slate-400 font-semibold italic">Nessun dispositivo attualmente connesso.</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB IMPOSTAZIONI -->
+      <div id="tabSettings" class="hidden space-y-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          
+          <!-- NUOVO PANNELLO GESTIONE QUOTE E-MAIL -->
+          <div class="glass-card p-6 rounded-3xl border border-slate-200 shadow-sm space-y-5 bg-white">
+            <h4 class="font-outfit font-black text-indigo-950 text-lg flex items-center gap-2"><i data-lucide="mail-warning" class="text-indigo-600 w-5 h-5"></i> Gestione E-mail & Quota</h4>
+            
+            <div class="space-y-2 border-b pb-4">
+              <div class="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
+                <span class="text-xs font-black text-slate-600 uppercase">E-mail inviate oggi:</span>
+                <span class="text-base font-black text-indigo-700" id="adminEmailQuotaText">0 / 100</span>
+              </div>
+              <p class="text-[10px] text-slate-500 font-bold pt-1 leading-relaxed">Google Apps Script impone un limite gratuito di 100 email al giorno. Il sistema sospenderà in automatico gli invii se si avvicina al limite per prevenire blocchi.</p>
+            </div>
+
+            <div class="space-y-2">
+              <button onclick="window.sendPendingEmails()" class="px-4 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-black uppercase transition shadow-md flex justify-center items-center gap-2 w-full">
+                <i data-lucide="send" class="w-4 h-4"></i> INVIA E-MAIL IN CODA (SOSPESE)
+              </button>
+              <p class="text-[10px] text-slate-500 font-bold mt-2 leading-relaxed">Se delle email non sono partite (es. Ingressi o Pergamene), usa questo tasto per forzare l'invio della coda. Controlla prima la quota rimanente.</p>
+            </div>
+          </div>
+
+          <div class="glass-card p-6 rounded-3xl border border-slate-200 shadow-sm space-y-5 bg-white">
+            <h4 class="font-outfit font-black text-indigo-950 text-lg flex items-center gap-2"><i data-lucide="settings" class="text-indigo-600 w-5 h-5"></i> Impostazioni Generali</h4>
+            
+            <div class="space-y-2 border-b pb-4">
+              <label class="text-[10px] font-black text-slate-500 uppercase tracking-wider block">Frequenza Giorni Promemoria</label>
+              <div class="flex gap-2">
+                <input type="number" id="settingsPromemoriaDays" min="1" max="15" value="7" class="w-20 p-2.5 border border-slate-200 rounded-xl font-bold text-center outline-none">
+                <button onclick="window.savePromemoriaSettings()" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition">Salva Configurazione</button>
+              </div>
+              <span class="text-[10px] text-slate-400 font-bold block">Specifica quanti giorni prima del turno d'aula inviare la mail promemoria automatica.</span>
+            </div>
+
+            <div class="space-y-2 pt-2">
+              <h5 class="text-xs font-bold text-rose-800 uppercase">Gestione Database</h5>
+              <div class="flex flex-col sm:flex-row gap-3 mt-3">
+                <button onclick="window.triggerResetDatabase()" class="px-4 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black uppercase transition shadow-md flex justify-center items-center gap-2 w-full">
+                  <i data-lucide="trash-2" class="w-4 h-4"></i> SVUOTA ISCRITTI
+                </button>
+                <button onclick="window.triggerResetDates()" class="px-4 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase transition shadow-md flex justify-center items-center gap-2 w-full">
+                  <i data-lucide="calendar-off" class="w-4 h-4"></i> SVUOTA CALENDARIO
+                </button>
+              </div>
+              <p class="text-[10px] text-slate-500 font-bold mt-2 leading-relaxed">Azioni irreversibili protette da password di sistema ("RESET").</p>
+            </div>
+          </div>
+
+          <div class="glass-card p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4 bg-white md:col-span-2">
+            <h4 class="font-outfit font-black text-indigo-950 text-lg flex items-center gap-2"><i data-lucide="calendar-plus" class="text-indigo-600 w-5 h-5"></i> Pianifica Turno d'Aula</h4>
+            <form onsubmit="window.handleCreateTurno(event)" class="space-y-4 text-xs font-semibold">
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="space-y-1.5"><label class="text-[10px] uppercase font-bold text-slate-500">Data Turno *</label><input required type="date" id="newTurnoDate" class="w-full p-2.5 border border-slate-200 rounded-xl outline-none bg-slate-50"></div>
+                <div class="space-y-1.5"><label class="text-[10px] uppercase font-bold text-slate-500">Fascia Oraria *</label><input required type="text" id="newTurnoTime" class="w-full p-2.5 border border-slate-200 rounded-xl outline-none bg-slate-50" placeholder="es. 09:00 - 11:00"></div>
+                <div class="space-y-1.5"><label class="text-[10px] uppercase font-bold text-slate-500">Aula / Sede *</label><input required type="text" id="newTurnoAula" class="w-full p-2.5 border border-slate-200 rounded-xl outline-none bg-slate-50" placeholder="Aula Magna"></div>
+                <div class="space-y-1.5"><label class="text-[10px] uppercase font-bold text-slate-500">Capienza Max *</label><input required type="number" min="1" id="newTurnoSeats" class="w-full p-2.5 border border-slate-200 rounded-xl font-bold outline-none bg-slate-50" value="100"></div>
+              </div>
+              <div class="space-y-1.5">
+                <label class="text-[10px] uppercase font-bold text-slate-500">Percorso di Studio Abbinato *</label>
+                <select required id="newTurnoPath" class="w-full p-2.5 border border-slate-200 rounded-xl bg-slate-50 outline-none font-bold text-slate-700">
+                  <option value="LS - Liceo Scientifico opzione Scienze Applicate e Liceo Scienze Applicate - Curvatura Economica">LS - Liceo Scientifico opzione Scienze Applicate e Liceo Scienze Applicate - Curvatura Economica</option>
+                  <option value="RIM - Relazioni Internazionali per il Marketing">RIM - Relazioni Internazionali per il Marketing</option>
+                  <option value="LOG - Logistica e Trasporti">LOG - Logistica e Trasporti</option>
+                  <option value="CAT - Costruzioni, Ambiente e Territorio">CAT - Costruzioni, Ambiente e Territorio</option>
+                  <option value="MODA - Sistema Moda">MODA - Sistema Moda</option>
+                </select>
+              </div>
+              <button type="submit" class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-black rounded-xl text-xs uppercase shadow-md transition">Aggiungi Turno a Calendario</button>
+            </form>
+          </div>
+        </div>
+
+        <div class="glass-card p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4 bg-white/80">
+          <h4 class="font-outfit font-black text-indigo-950 text-base border-b pb-2">Turni Pubblicati in Calendario</h4>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-xs font-semibold">
+              <thead>
+                <tr class="bg-slate-100 text-slate-500 border-b uppercase tracking-wider"><th class="p-3">Data</th><th class="p-3">Orario</th><th class="p-3">Indirizzo</th><th class="p-3">Aula</th><th class="p-3 text-center">Posti Occupati</th><th class="p-3 text-right">Modifica</th></tr>
+              </thead>
+              <tbody id="adminDatesTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB STATISTICHE -->
+      <div id="tabStatistics" class="hidden space-y-6">
+        <div id="adminStatsGrid" class="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          <div class="glass-card p-4 rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Studenti Iscritti</span>
+            <span class="text-xl font-black text-slate-900" id="statTotalIscritti">0</span>
+          </div>
+          <div class="glass-card p-4 rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Accreditati (Entrati)</span>
+            <span class="text-xl font-black text-blue-600" id="statTotalEntrati">0</span>
+          </div>
+          <div class="glass-card p-4 rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Conclusi</span>
+            <span class="text-xl font-black text-emerald-600" id="statTotalCertificati">0</span>
+          </div>
+          <div class="glass-card p-4 rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Assenti</span>
+            <span class="text-xl font-black text-rose-600" id="statTotalAssenti">0</span>
+          </div>
+          <div class="glass-card p-4 rounded-2xl border border-violet-200 bg-violet-50/50 shadow-sm">
+            <span class="text-[9px] font-bold text-violet-600 uppercase tracking-wider block">Colloqui Inclusione</span>
+            <span class="text-xl font-black text-violet-800" id="statTotalInclusione">0</span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+           <div class="glass-card p-6 rounded-3xl border border-slate-200 shadow-sm bg-white flex flex-col">
+             <h4 class="font-outfit font-black text-indigo-950 text-base border-b pb-2 mb-4"><i data-lucide="pie-chart" class="w-4 h-4 inline text-indigo-600 mr-1"></i> Ripartizione per Indirizzo</h4>
+             <div class="relative w-full h-64 flex-grow"><canvas id="chartIndirizzi"></canvas></div>
+             <p id="statsTextIndirizzi" class="text-xs text-slate-600 mt-4 font-semibold text-center bg-slate-50 p-3 rounded-xl border border-slate-100"></p>
+           </div>
+           <div class="glass-card p-6 rounded-3xl border border-slate-200 shadow-sm bg-white flex flex-col">
+             <h4 class="font-outfit font-black text-indigo-950 text-base border-b pb-2 mb-4"><i data-lucide="bar-chart-2" class="w-4 h-4 inline text-indigo-600 mr-1"></i> Andamento Partecipazione</h4>
+             <div class="relative w-full h-64 flex-grow"><canvas id="chartStato"></canvas></div>
+             <p id="statsTextPartecipazione" class="text-xs text-slate-600 mt-4 font-semibold text-center bg-slate-50 p-3 rounded-xl border border-slate-100"></p>
+           </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FOOTER ISTITUZIONALE CENTRALIZZATO -->
+    <footer class="bg-indigo-950 text-slate-300 py-10 mt-auto border-t border-indigo-900 z-10 relative">
+      <div class="max-w-4xl mx-auto px-4 flex flex-col items-center text-center space-y-4">
+         <div class="w-16 h-16 bg-white rounded-2xl flex items-center justify-center p-1.5 shadow-xl">
+           <img src="levi.png" alt="Logo" class="w-full h-full object-contain" onerror="this.onerror=null; this.outerHTML='<div class=\'w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-black text-xl\'>PL</div>';">
+         </div>
+         <div>
+           <p class="font-extrabold text-white font-outfit text-xl tracking-wider">ITSCG "Primo Levi"</p>
+           <p class="font-semibold text-indigo-300 text-sm mt-1">Via Briantina, 68 - 20831 Seregno (MB)</p>
+         </div>
+         <div class="flex flex-col sm:flex-row justify-center items-center gap-4 mt-2 font-bold text-sm bg-indigo-900/50 py-2 px-6 rounded-full border border-indigo-800">
+           <a href="mailto:mbtd430001@istruzione.it" class="hover:text-white transition flex items-center gap-2"><i data-lucide="mail" class="w-4 h-4 text-sky-400"></i> mbtd430001@istruzione.it</a>
+           <span class="text-indigo-700 hidden sm:inline">|</span>
+           <a href="mailto:orientamento@leviseregno.edu.it" class="hover:text-white transition flex items-center gap-2"><i data-lucide="inbox" class="w-4 h-4 text-sky-400"></i> orientamento@leviseregno.edu.it</a>
+         </div>
+         <div class="pt-6 w-full border-t border-indigo-900/50 mt-4">
+           <p class="font-black text-indigo-500 tracking-widest uppercase text-[10px]">&copy; 2026 Tutti i diritti riservati.</p>
+         </div>
+      </div>
+    </footer>
+  </div>
+
+  <!-- MODALITA SCANNER CELLULARE A SCHERMO INTERO -->
+  <div id="wrapperCompanionScanner" class="hidden fixed inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center p-4">
+    <div class="absolute top-4 left-4 flex items-center gap-2 bg-emerald-500/20 text-emerald-400 px-4 py-2 rounded-full text-xs font-black border border-emerald-500/30">
+      <div class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></div> SCANNER ATTIVO
+    </div>
+    <button onclick="window.exitCompanionScanner()" class="absolute top-4 right-4 p-3 bg-white/10 hover:bg-white/30 text-white rounded-full transition"><i data-lucide="x"></i></button>
+    
+    <div class="relative w-full max-w-[280px] aspect-[3/4] bg-black rounded-3xl overflow-hidden border-4 border-slate-800 shadow-2xl flex items-center justify-center mt-8">
+      <div id="companionScannerLaser" class="laser-line"></div>
+      <video id="companionVideo" class="w-full h-full object-cover" playsinline></video>
+      <canvas id="companionCanvas" class="hidden"></canvas>
+      
+      <!-- SCHEDA VERDE OVERLAY AMMESSO -->
+      <div id="scannerSuccessOverlay" class="hidden absolute inset-0 bg-emerald-500 flex flex-col items-center justify-center text-white p-6 z-20 transition-opacity">
+        <i data-lucide="check-circle" class="w-20 h-20 mb-4 animate-bounce"></i>
+        <h3 class="text-4xl font-black tracking-widest mb-2 font-outfit">AMMESSO</h3>
+        <p id="scannerScannedName" class="text-2xl font-bold text-center uppercase leading-tight"></p>
+        <p id="scannerScannedPath" class="text-sm font-semibold mt-3 text-emerald-100 text-center"></p>
+      </div>
+    </div>
+    <p class="text-slate-400 text-xs text-center mt-6 max-w-[280px] font-bold leading-relaxed">Punta il QR Code. La lettura avverrà in automatico. Il sistema blocca doppie letture per 4 secondi.</p>
+  </div>
+
+  <!-- MODALS EDIT ISCRIZIONE / TURNO -->
+  <div id="editRegModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="glass-card w-full max-w-md p-8 rounded-3xl relative shadow-2xl bg-white">
+      <button onclick="window.closeModal('editRegModal')" class="absolute top-5 right-5 p-2 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-full transition"><i data-lucide="x" class="w-4 h-4"></i></button>
+      <h3 class="text-xl font-black text-indigo-950 font-outfit mb-4">Modifica Iscritto</h3>
+      <form onsubmit="window.saveEditReg(event)" class="space-y-4 font-semibold text-xs text-slate-600">
+        <input type="hidden" id="editRegCode">
+        <div class="grid grid-cols-2 gap-4">
+          <div><label class="text-[10px] font-black uppercase text-slate-500 block mb-1">Cognome</label><input required type="text" id="editRegCognome" class="w-full p-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500"></div>
+          <div><label class="text-[10px] font-black uppercase text-slate-500 block mb-1">Nome</label><input required type="text" id="editRegNome" class="w-full p-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500"></div>
+        </div>
+        <div><label class="text-[10px] font-black uppercase text-slate-500 block mb-1">Email</label><input required type="email" id="editRegEmail" class="w-full p-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500"></div>
+        <div><label class="text-[10px] font-black uppercase text-slate-500 block mb-1">Posti Totali</label><input required type="number" min="1" id="editRegPosti" class="w-full p-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500 font-bold"></div>
+        <button type="submit" class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-black rounded-xl transition shadow-md mt-2 uppercase tracking-widest">Salva Modifiche</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="editDateModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="glass-card w-full max-w-md p-8 rounded-3xl relative shadow-2xl bg-white">
+      <button onclick="window.closeModal('editDateModal')" class="absolute top-5 right-5 p-2 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-full transition"><i data-lucide="x" class="w-4 h-4"></i></button>
+      <h3 class="text-xl font-black text-indigo-950 font-outfit mb-4">Modifica Turno</h3>
+      <form onsubmit="window.saveEditDate(event)" class="space-y-4 font-semibold text-xs text-slate-600">
+        <input type="hidden" id="editDateId">
+        <div class="grid grid-cols-2 gap-4">
+          <div><label class="text-[10px] font-black uppercase text-slate-500 block mb-1">Data</label><input required type="date" id="editDateValue" class="w-full p-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500"></div>
+          <div><label class="text-[10px] font-black uppercase text-slate-500 block mb-1">Orario</label><input required type="text" id="editDateTime" class="w-full p-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500"></div>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div><label class="text-[10px] font-black uppercase text-slate-500 block mb-1">Aula</label><input required type="text" id="editDateAula" class="w-full p-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500"></div>
+          <div><label class="text-[10px] font-black uppercase text-slate-500 block mb-1">Posti Max</label><input required type="number" min="1" id="editDateSeats" class="w-full p-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500 font-bold"></div>
+        </div>
+        <div>
+          <label class="text-[10px] font-black uppercase text-slate-500 block mb-1">Indirizzo</label>
+          <select required id="editDatePath" class="w-full p-2.5 border border-slate-200 rounded-xl bg-white outline-none font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500">
+            <option value="LS - Liceo Scientifico opzione Scienze Applicate e Liceo Scienze Applicate - Curvatura Economica">LS - Liceo Scientifico opzione Scienze Applicate e Liceo Scienze Applicate - Curvatura Economica</option>
+            <option value="RIM - Relazioni Internazionali per il Marketing">RIM - Relazioni Internazionali per il Marketing</option>
+            <option value="LOG - Logistica e Trasporti">LOG - Logistica e Trasporti</option>
+            <option value="CAT - Costruzioni, Ambiente e Territorio">CAT - Costruzioni, Ambiente e Territorio</option>
+            <option value="MODA - Sistema Moda">MODA - Sistema Moda</option>
+          </select>
+        </div>
+        <button type="submit" class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-black rounded-xl transition shadow-md mt-2 uppercase tracking-widest">Aggiorna Turno</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODALS RECUPERO/ANNULLAMENTO -->
+  <div id="recoveryModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div id="recoveryModalFormView" class="glass-card w-full max-w-md p-8 rounded-3xl relative shadow-2xl bg-white">
+      <button onclick="window.closeModal('recoveryModal')" class="absolute top-5 right-5 p-2 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-full transition"><i data-lucide="x" class="w-4 h-4"></i></button>
+      <div class="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4 border border-indigo-100"><i data-lucide="search" class="w-6 h-6"></i></div>
+      <h3 class="text-xl font-black text-center font-outfit mb-6 text-slate-900">Recupera Prenotazione</h3>
+      <form onsubmit="window.handleRecovery(event)" class="space-y-4 font-semibold text-xs text-slate-600">
+        <div><label class="text-[10px] font-black uppercase text-slate-500 block mb-1">Codice Prenotazione</label><input type="text" id="recoveryCode" class="w-full p-3.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Es. LEVI-1234"></div>
+        <div class="text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2"><div class="flex-grow border-t border-slate-200"></div>OPPURE<div class="flex-grow border-t border-slate-200"></div></div>
+        <div class="flex gap-4">
+          <div class="w-1/2"><label class="text-[10px] font-black uppercase text-slate-500 block mb-1">Cognome</label><input type="text" id="recoveryCognome" class="w-full p-3.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Rossi"></div>
+          <div class="w-1/2"><label class="text-[10px] font-black uppercase text-slate-500 block mb-1">Nome</label><input type="text" id="recoveryNome" class="w-full p-3.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Mario"></div>
+        </div>
+        <button type="submit" id="btnSubmitRecovery" class="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-black rounded-xl transition shadow-lg mt-2 uppercase tracking-widest flex justify-center items-center gap-2">Invia Conferma via Email</button>
+      </form>
+    </div>
+    <div id="recoveryModalSuccessView" class="hidden glass-card w-full max-w-md p-8 rounded-3xl text-center shadow-2xl bg-white">
+      <div class="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4"><i data-lucide="check" class="w-8 h-8"></i></div>
+      <h3 class="text-2xl font-black text-emerald-600 font-outfit mb-3">Inviato con Successo!</h3>
+      <p class="text-sm font-semibold text-slate-600 mb-6" id="recoveryModalMessage">Il recupero è stato messo in coda. Arriverà a breve.</p>
+      <button onclick="window.closeModal('recoveryModal')" class="w-full px-6 py-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black uppercase tracking-wider rounded-xl transition">Chiudi Finestra</button>
+    </div>
+  </div>
+
+  <div id="cancelModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div id="cancelModalFormView" class="glass-card w-full max-w-md p-8 rounded-3xl relative shadow-2xl bg-white">
+      <button onclick="window.closeModal('cancelModal')" class="absolute top-5 right-5 p-2 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-full transition"><i data-lucide="x" class="w-4 h-4"></i></button>
+      <div class="w-12 h-12 bg-rose-50 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-4 border border-rose-100"><i data-lucide="trash-2" class="w-6 h-6"></i></div>
+      <h3 class="text-xl font-black text-center font-outfit mb-6 text-slate-900">Annulla Prenotazione</h3>
+      <form onsubmit="window.handleCancellation(event)" class="space-y-4 font-semibold text-xs text-slate-600">
+        <div><label class="text-[10px] font-black uppercase text-slate-500 block mb-1">Codice Prenotazione</label><input type="text" id="cancelCode" class="w-full p-3.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-rose-500" placeholder="Es. LEVI-1234"></div>
+        <div class="text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2"><div class="flex-grow border-t border-slate-200"></div>OPPURE<div class="flex-grow border-t border-slate-200"></div></div>
+        <div class="flex gap-4">
+          <div class="w-1/2"><label class="text-[10px] font-black uppercase text-slate-500 block mb-1">Cognome</label><input type="text" id="cancelCognome" class="w-full p-3.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-rose-500" placeholder="Rossi"></div>
+          <div class="w-1/2"><label class="text-[10px] font-black uppercase text-slate-500 block mb-1">Nome</label><input type="text" id="cancelNome" class="w-full p-3.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-rose-500" placeholder="Mario"></div>
+        </div>
+        <button type="submit" id="btnSubmitCancellation" class="w-full py-4 bg-rose-600 hover:bg-rose-500 text-white font-black rounded-xl transition shadow-lg mt-2 uppercase tracking-widest">Conferma Annullamento</button>
+      </form>
+    </div>
+    <div id="cancelModalSuccessView" class="hidden glass-card w-full max-w-md p-8 rounded-3xl text-center shadow-2xl bg-white">
+      <div class="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4"><i data-lucide="check" class="w-8 h-8"></i></div>
+      <h3 class="text-2xl font-black text-emerald-600 font-outfit mb-3">Annullato con Successo!</h3>
+      <p class="text-sm font-semibold text-slate-600 mb-6">La prenotazione è stata rimossa. Abbiamo liberato i posti in aula per altre famiglie.</p>
+      <button onclick="window.closeModal('cancelModal')" class="w-full px-6 py-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black uppercase tracking-wider rounded-xl transition">Chiudi Finestra</button>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, collection, doc, setDoc, deleteDoc, updateDoc, onSnapshot, getDocs, getDoc, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDAQB-W-QTV1thVoCCifbdTFbpaYmAM4eQ",
+      authDomain: "progetto-63fb3.firebaseapp.com",
+      projectId: "progetto-63fb3",
+      storageBucket: "progetto-63fb3.firebasestorage.app",
+      messagingSenderId: "883088850197",
+      appId: "1:883088850197:web:cdf15e64a0e3863b1b3d1c"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const appId = 'openday-primolevi-seregno';
+
+
+    // OPEN_DAY_LICEO_PREFERENCE_V2 - scelta indirizzo liceale integrata con prenotazione e lista d'attesa
+    // OPEN_DAY_WAITLIST_V2 - capienza per persone, scorrimento cronologico compatibile e anti-overbooking
+    const WAITLIST_TYPE = 'lista_attesa';
+    const ACTIVE_TYPE = 'prenotazione';
+    const WAITLIST_LOCK_COLLECTION = 'openday_waitlist_locks';
+    const waitlistOwnerId = `OD-WEB-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    let openDayWaitlistMode = false;
+    let openDayWaitlistReconcileTimer = null;
+    function canonicalOpenDayStudyPath(value) {
+      let normalized = String(value || '').replace(/Curvatura Economia/g, 'Curvatura Economica');
+      if (/Liceo Scientifico/i.test(normalized) && /Curvatura Economica/i.test(normalized)) {
+        const amp = String.fromCharCode(38);
+        normalized = normalized.split(amp + 'amp;').join(' e ').split(amp).join(' e ');
+        normalized = normalized.replace(/\s+/g, ' ').trim();
+        if (/^LS\s*-\s*Liceo Scientifico opzione Scienze Applicate\s+e\s+Liceo Scienze Applicate\s*-\s*Curvatura Economica$/i.test(normalized)) {
+          normalized = 'LS - Liceo Scientifico opzione Scienze Applicate e Liceo Scienze Applicate - Curvatura Economica';
+        }
+      }
+      return normalized;
+    }
+    const OPEN_DAY_LICEO_COMBINED = 'LS - Liceo Scientifico opzione Scienze Applicate e Liceo Scienze Applicate - Curvatura Economica';
+    const OPEN_DAY_LICEO_PREF_STANDARD = 'scienze_applicate';
+    const OPEN_DAY_LICEO_PREF_CURVATURA = 'curvatura_economica';
+    function isOpenDayLiceoPath(value) {
+      return /Liceo Scientifico/i.test(canonicalOpenDayStudyPath(value));
+    }
+    function openDayLiceoPreferenceKey(value) {
+      if (value && typeof value === 'object') return String(value.liceoPreference || '').trim();
+      return String(value || '').trim();
+    }
+    function openDayLiceoPreferenceLabel(value) {
+      const key = openDayLiceoPreferenceKey(value);
+      if (key === OPEN_DAY_LICEO_PREF_STANDARD) return 'Liceo Scientifico - Opzione Scienze Applicate';
+      if (key === OPEN_DAY_LICEO_PREF_CURVATURA) return 'Liceo Scientifico - Opzione Scienze Applicate - Curvatura Economica';
+      return '';
+    }
+    function updateOpenDayLiceoPreferenceField(studyPath) {
+      const block = document.getElementById('openDayLiceoPreferenceBlock');
+      const select = document.getElementById('formLiceoPreference');
+      if (!block || !select) return;
+      const liceo = isOpenDayLiceoPath(studyPath);
+      block.classList.toggle('hidden', !liceo);
+      select.required = liceo;
+      if (!liceo) select.value = '';
+    }
+
+    // --- SOSTITUISCI QUESTI LINK CON I TUOI SCRIPT GOOGLE REALI ---
+    const CONFIRM_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx934SuTzxYNzb82Tn9_kwPfTbAQFBQv5kGoqtIBP1GAlPdnICUAG2tFSYAnKhmf1P6Ow/exec"; 
+    const CANCEL_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx2BNhnVfV2Mu0YMjHy-wcagr5-_nHui8nZqMLZXfjPD1iEsKRKSX4k6URFD1t_kmq_Jw/exec"; 
+    const ATTESTATO_ENTRATA_URL = "https://script.google.com/macros/s/AKfycbyW546zDa6kAI5cAaJkL-se9ngljm4c3UhlFuMxMPMmNVO-f5QsdUCqeotfJe0aFy7MBA/exec"; 
+    const ATTESTATO_USCITA_URL = "https://script.google.com/macros/s/AKfycbz8MnsiM0QnbbkMqiSFCOVMpbFQamKaSy8lm7E-LdyeuOIEbmA_BqRINa4Pt7Nq7HFt/exec";
+
+    let state = { 
+      user: null, currentView: 'home', isAdminAuthed: false, 
+      dates: [], registrations: [], currentBooking: null, devices: [], emailQuota: { count: 0, date: '' } 
+    };
+
+    // Fissate le istanze dei grafici come variabili globali di window per evitare errori di scope in transpilation/compilation
+    window.chartIndirizziInstance = null;
+    window.chartStatoInstance = null;
+    let myIpAddress = "IP Nascosto";
+
+    fetch('https://api.ipify.org?format=json').then(r=>r.json()).then(d=>{ myIpAddress = d.ip; }).catch(e=>{});
+
+    const getDeviceId = () => {
+      let id = localStorage.getItem('levi_scanner_device_id');
+      if(!id) { id = 'DISP-' + Math.floor(Math.random()*90000+10000); localStorage.setItem('levi_scanner_device_id', id); }
+      return id + ' (' + myIpAddress + ')';
+    };
+
+    // --- FUNZIONI DI UTILITA' GLOBALI ---
+    function showToast(msg, type='success') {
+      const c = document.getElementById('toastContainer');
+      if(!c) return;
+      const t = document.createElement('div');
+      t.className = `p-4 rounded-xl shadow-lg border text-xs font-black glass-card mb-2 transition-all ${type==='success'?'text-emerald-700 border-emerald-200':(type==='info'?'text-sky-700 border-sky-200':(type==='warning'?'text-amber-700 border-amber-200':'text-rose-700 border-rose-200'))}`;
+      t.innerHTML = msg;
+      c.appendChild(t);
+      setTimeout(() => t.remove(), 4000);
+    }
+    window.showToast = showToast;
+    
+    function toTitleCase(str) { return str.toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '); }
+
+    // --- GENERATORE PDF CLIENT-SIDE ---
+    async function generateReceiptPDF(data, code) {
+      const { jsPDF } = window.jspdf; 
+      const docObj = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      
+      docObj.setDrawColor(79, 70, 229); docObj.setLineWidth(2); docObj.rect(10, 10, 190, 277);
+      docObj.setFillColor(30, 27, 75); docObj.rect(12, 12, 186, 35, 'F');
+      docObj.setTextColor(255, 255, 255); docObj.setFont('helvetica', 'bold'); docObj.setFontSize(24); docObj.text('ITSCG "PRIMO LEVI"', 105, 28, { align: 'center' });
+      docObj.setFont('helvetica', 'normal'); docObj.setFontSize(11); docObj.setTextColor(199, 210, 254); docObj.text('PASS UFFICIALE OPEN DAY 2026/2027', 105, 38, { align: 'center' });
+      
+      docObj.setTextColor(15, 23, 42); docObj.setFont('helvetica', 'bold'); docObj.setFontSize(16); docObj.text('DETTAGLI PRENOTAZIONE', 105, 65, { align: 'center' });
+      
+      docObj.setDrawColor(226, 232, 240); docObj.setFillColor(248, 250, 252); docObj.setLineWidth(0.5); docObj.rect(20, 75, 170, 115, 'FD');
+      
+      let startY = 88; const lineH = 13; docObj.setFontSize(11);
+      const addField = (label, value, y) => { docObj.setFont('helvetica', 'bold'); docObj.setTextColor(100, 116, 139); docObj.text(label, 25, y); docObj.setFont('helvetica', 'bold'); docObj.setTextColor(15, 23, 42); docObj.text(String(value), 75, y); };
+      
+      addField('Studente:', `${data.cognome} ${data.nome}`, startY);
+      addField('Codice Ingresso:', code, startY + lineH);
+      const selectedStudyPath = openDayLiceoPreferenceLabel(data) || data.studyPath;
+      addField('Indirizzo Scelto:', docObj.splitTextToSize(selectedStudyPath, 110), startY + lineH*2);
+      addField('Data e Orario:', data.dateStr, startY + lineH*3);
+      addField('Posti Riservati:', `${data.totalPeople} Persona/e`, startY + lineH*4);
+      addField('Scuola Prov.:', docObj.splitTextToSize(data.provenienza, 110), startY + lineH*5);
+      addField('Inclusione:', data.inclusione ? 'Richiesto Colloquio' : 'Non richiesto', startY + lineH*6);
+      addField('Stato:', 'CONFERMATO / ISCRITTO', startY + lineH*7);
+      
+      try { const c = document.createElement('canvas'); new QRious({ element: c, value: code, size: 250, level: 'H' }); docObj.addImage(c.toDataURL('image/jpeg'), 'JPEG', 145, 140, 38, 38); } catch(e){}
+      
+      docObj.setFontSize(13); docObj.setTextColor(30, 27, 75); docObj.text("ISTRUZIONI PER L'INGRESSO", 105, 210, { align: 'center' });
+      docObj.setFont('helvetica', 'normal'); docObj.setFontSize(11); docObj.setTextColor(71, 85, 105);
+      const instructions = "Presentati all'ingresso dell'istituto 10 minuti prima dell'inizio del tuo turno. Tieni a portata di mano questo pass (puoi mostrarlo direttamente dallo schermo del tuo smartphone senza stamparlo). Il codice QR verrà scansionato dai docenti per convalidare la tua presenza e garantirti l'accesso all'aula di presentazione e ai laboratori. Per tutti gli ospiti è disponibile il parcheggio interno della scuola , con entrata dal secondo cancello.";
+      docObj.text(docObj.splitTextToSize(instructions, 150), 105, 220, { align: 'center', lineHeightFactor: 1.5 });
+      
+      docObj.setFillColor(241, 245, 249); docObj.rect(12, 272, 186, 13, 'F'); docObj.setFontSize(9); docObj.setTextColor(100, 116, 139); docObj.text('ITSCG "Primo Levi" | Via Briantina, 68 - Seregno (MB) | orientamento@leviseregno.edu.it', 105, 280, { align: 'center' });
+      
+      return docObj.output('datauristring').split(',')[1];
+    }
+    window.generateReceiptPDF = generateReceiptPDF;
+
+    // --- MOTORE INTELLIGENTE EMAIL (SMART QUEUE ENGINE) ---
+    // Ogni browser puo vedere la stessa coda: una lease Firestore per singola e-mail
+    // evita doppi invii quando piu dispositivi sono aperti contemporaneamente.
+    const EMAIL_ENGINE_OWNER = `MAIL-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+    async function acquireOpenDayEmailDeliveryLease(code, type) {
+      const safeId = `${String(code || '').replace(/[^A-Za-z0-9_-]/g, '_')}_${String(type || 'mail')}`;
+      const ref = doc(db, 'artifacts', appId, 'public', 'data', 'email_delivery_locks', safeId);
+      try {
+        return await runTransaction(db, async tx => {
+          const snap = await tx.get(ref);
+          const now = Date.now();
+          const old = snap.exists() ? snap.data() : {};
+          if (Number(old.lockedUntil || 0) > now && old.owner !== EMAIL_ENGINE_OWNER) return false;
+          tx.set(ref, { owner: EMAIL_ENGINE_OWNER, code, type, lockedAt: now, lockedUntil: now + 60000 }, { merge: true });
+          return true;
+        });
+      } catch (e) {
+        console.warn('OpenDay email lease non acquisita', e);
+        return false;
+      }
+    }
+
+    function parseOpenDayLocalDate(dateStr, timeStr = '00:00') {
+      const [y, m, d] = String(dateStr || '').split('-').map(Number);
+      const [hh, mm] = String(timeStr || '00:00').trim().split(':').map(Number);
+      if (![y, m, d, hh, mm].every(Number.isFinite)) return null;
+      return new Date(y, m - 1, d, hh, mm, 0, 0);
+    }
+
+    function openDayEventEndPlusFive(reg) {
+      const slot = state.dates.find(d => d.id === reg.dateId);
+      if (!slot?.date || !slot?.timeSlot) return null;
+      let endTime = String(slot.timeSlot).includes('-') ? String(slot.timeSlot).split('-')[1].trim() : String(slot.timeSlot).trim();
+      const end = parseOpenDayLocalDate(slot.date, endTime);
+      if (!end) return null;
+      end.setMinutes(end.getMinutes() + 5);
+      return end.getTime();
+    }
+
+    async function reconcileScheduledOpenDayEmails() {
+      const now = Date.now();
+      const reminderDays = Math.max(0, Number(window.promemoriaDays ?? 7) || 7);
+      const writes = [];
+
+      for (const reg of state.registrations) {
+        if (isWaitlistRegistration(reg)) continue;
+        const slot = state.dates.find(d => d.id === reg.dateId);
+        if (!slot) continue;
+
+        if (!reg.promemoriaSentDate && slot.date) {
+          const startTime = String(slot.timeSlot || '00:00').includes('-') ? String(slot.timeSlot).split('-')[0].trim() : String(slot.timeSlot || '00:00').trim();
+          const start = parseOpenDayLocalDate(slot.date, startTime);
+          if (start) {
+            const diffDays = Math.ceil((start.getTime() - now) / 86400000);
+            if (diffDays >= 0 && diffDays <= reminderDays) {
+              reg.promemoriaSentDate = 'IN_CODA_Q2';
+              writes.push(updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', reg.code), { promemoriaSentDate: 'IN_CODA_Q2' }));
+            }
+          }
+        }
+
+        if (reg.status === 'Ammesso' && !reg.pergamenaSentDate) {
+          const dueAt = openDayEventEndPlusFive(reg);
+          if (dueAt && now >= dueAt) {
+            reg.status = 'Concluso';
+            reg.pergamenaSentDate = 'IN_CODA_Q3';
+            reg.pergamenaDueAt = dueAt;
+            writes.push(updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', reg.code), {
+              status: 'Concluso',
+              pergamenaSentDate: 'IN_CODA_Q3',
+              pergamenaDueAt: dueAt,
+              concludedAt: now
+            }));
+          }
+        }
+      }
+
+      if (writes.length) await Promise.allSettled(writes);
+    }
+    window.reconcileScheduledOpenDayEmails = reconcileScheduledOpenDayEmails;
+
+    const SmartEmailEngine = {
+      maxDaily: 100,
+      reserveQ1: 40, 
+      safeLimit: 90, 
+      batchSize: 2,  
+      intervalMs: 30000, 
+      timerId: null,
+      isProcessing: false,
+      
+      start() {
+        if(this.timerId) clearInterval(this.timerId);
+        this.log("Motore E-mail Avviato. Controllo continuo delle code attivo...");
+        this.processQueues().catch(e => this.log(`Errore ciclo iniziale: ${e.message || e}`, "error"));
+        this.timerId = setInterval(() => {
+          this.processQueues().catch(e => this.log(`Errore ciclo automatico: ${e.message || e}`, "error"));
+        }, this.intervalMs);
+        this.updateDashboard();
+      },
+      
+      stop() {
+        if(this.timerId) clearInterval(this.timerId);
+        this.log("Motore E-mail Fermato.", "warning");
+      },
+
+      async flushNow() {
+        this.log("Esecuzione forzata manuale...");
+        return this.processQueues();
+      },
+
+      log(msg, type="info") {
+        const consoleEl = document.getElementById('engineConsoleLog');
+        if(!consoleEl) return;
+        const time = new Date().toLocaleTimeString('it-IT', { hour12: false, hour: '2-digit', minute:'2-digit', second:'2-digit' });
+        let color = type === "error" ? "text-rose-400" : (type === "warning" ? "text-amber-400" : "text-emerald-400");
+        consoleEl.innerHTML += `<div class="${color}"><span class="text-slate-500">[${time}]</span> ${msg}</div>`;
+        consoleEl.scrollTop = consoleEl.scrollHeight;
+      },
+
+      async processQueues() {
+        if (this.isProcessing) return;
+        this.isProcessing = true;
+
+        // Ricarica sempre la coda direttamente da Firestore prima di elaborarla.
+        // Evita che una prenotazione appena salvata resti bloccata in IN_CODA
+        // perché il listener realtime non ha ancora aggiornato state.registrations.
+        try {
+          const latestSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'registrations'));
+          const latestRegistrations = [];
+          latestSnap.forEach(d => latestRegistrations.push({ id: d.id, ...d.data() }));
+          state.registrations = latestRegistrations;
+        } catch (e) {
+          this.log("Aggiornamento coda da Firebase non riuscito: uso lo snapshot locale.", "warning");
+        }
+
+        // Accoda automaticamente i promemoria dovuti e chiude gli eventi 5 minuti
+        // dopo la fine, anche se il timeout originario della pagina e stato perso.
+        await reconcileScheduledOpenDayEmails();
+
+        const today = new Date().toLocaleDateString('it-IT');
+        let quotaSnap;
+        try { quotaSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'email_quota')); } catch(e){}
+        if (quotaSnap && quotaSnap.exists()) {
+          state.emailQuota = quotaSnap.data();
+          if (state.emailQuota.date !== today) { state.emailQuota = { date: today, count: 0 }; }
+        } else { state.emailQuota = { date: today, count: 0 }; }
+        
+        let q1 = [], q2 = [], q3 = [];
+        
+        state.registrations.forEach(r => {
+          if (r.passSentDate && r.passSentDate.includes('IN_CODA')) q1.push({reg: r, type: 'pass', url: CONFIRM_SCRIPT_URL});
+          if (r.promemoriaSentDate && r.promemoriaSentDate.includes('IN_CODA')) q2.push({reg: r, type: 'promemoria', url: CONFIRM_SCRIPT_URL});
+          if (r.presenzaSentDate && r.presenzaSentDate.includes('IN_CODA')) q3.push({reg: r, type: 'presenza', url: ATTESTATO_ENTRATA_URL});
+          if (r.pergamenaSentDate && r.pergamenaSentDate.includes('IN_CODA')) q3.push({reg: r, type: 'pergamena', url: ATTESTATO_USCITA_URL});
+        });
+
+        this.updateDashboard(q1.length, q2.length, q3.length);
+
+        if (q1.length === 0 && q2.length === 0 && q3.length === 0) {
+          this.isProcessing = false;
+          return; 
+        }
+        
+        let availableQuota = this.maxDaily - state.emailQuota.count;
+        
+        if (availableQuota <= 0) {
+          this.log("LIMITE GIORNALIERO RAGGIUNTO! Tutte le code sono sospese fino a domani.", "error");
+          const indicator = document.getElementById('engineStatusIndicator');
+          if (indicator) {
+            indicator.className = "flex items-center gap-1.5 bg-rose-50 text-rose-700 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase border border-rose-200";
+            indicator.innerHTML = '<div class="w-2 h-2 rounded-full bg-rose-500"></div> Bloccato';
+          }
+          this.isProcessing = false;
+          return;
+        }
+
+        let batchToProcess = [];
+        
+        if (q1.length > 0) {
+           batchToProcess = q1.slice(0, this.batchSize);
+           this.log(`Elaborazione Batch Q1: ${batchToProcess.length} elementi.`);
+        } 
+        else if (q2.length > 0 && availableQuota > 0) {
+           batchToProcess = q2.slice(0, this.batchSize);
+           this.log(`Elaborazione Batch Q2: ${batchToProcess.length} elementi.`);
+        } 
+        else if (q3.length > 0 && availableQuota > 0) {
+           batchToProcess = q3.slice(0, this.batchSize);
+           this.log(`Elaborazione Batch Q3: ${batchToProcess.length} elementi.`);
+        } 
+        else {
+           if(q2.length > 0 || q3.length > 0) {
+             this.log(`Invio sospeso per preservare la riserva prenotazioni (${availableQuota} rimasti).`, "warning");
+           }
+        }
+
+        for (const item of batchToProcess) {
+           await this.dispatchEmail(item);
+           await new Promise(r => setTimeout(r, 1000));
+        }
+
+        this.isProcessing = false;
+      },
+
+      async dispatchEmail(item) {
+        const fieldMap = { 'pass':'passSentDate', 'promemoria':'promemoriaSentDate', 'presenza':'presenzaSentDate', 'pergamena':'pergamenaSentDate' };
+        try {
+          const leaseOk = await acquireOpenDayEmailDeliveryLease(item.reg.code, item.type);
+          if (!leaseOk) {
+            this.log(`Invio [${item.type.toUpperCase()}] ${item.reg.code} gia preso in carico da un altro dispositivo.`, "warning");
+            return;
+          }
+          this.log(`Invio [${item.type.toUpperCase()}] per ${item.reg.code} -> ${item.reg.email}...`);
+          
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', item.reg.code), { [fieldMap[item.type]]: 'ELABORAZIONE' });
+          
+          let payload = {...item.reg, type: item.type};
+
+          if (item.type === 'pass' || item.type === 'promemoria' || item.type === 'recupero') {
+             this.log("Generazione PDF di alta qualità in corso...");
+             const pdfBase64 = await window.generateReceiptPDF(item.reg, item.reg.code);
+             payload.pdfBase64 = pdfBase64;
+          }
+
+          // Attende almeno il completamento della richiesta HTTP del browser.
+          // Con no-cors la risposta Google resta opaca, ma un errore di rete non viene più ignorato.
+          await window.inviaEmailScript(item.url, payload);
+          
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', item.reg.code), { [fieldMap[item.type]]: new Date().toLocaleString('it-IT') });
+          
+          state.emailQuota.count++;
+          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'email_quota'), { date: state.emailQuota.date, count: state.emailQuota.count });
+          
+          this.log(`Completato ${item.reg.code}. Quota residua: ${this.maxDaily - state.emailQuota.count}`, "success");
+          this.updateDashboard();
+        } catch(e) {
+          this.log(`Errore per ${item.reg.code}. Rimetto in coda.`, "error");
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', item.reg.code), { [fieldMap[item.type]]: 'IN_CODA_RETRY' });
+        }
+      },
+
+      updateDashboard(q1=0, q2=0, q3=0) {
+        if(document.getElementById('aiQuotaText')) document.getElementById('aiQuotaText').innerText = `${state.emailQuota.count} / 100`;
+        if(document.getElementById('aiQuotaBar')) document.getElementById('aiQuotaBar').style.width = `${state.emailQuota.count}%`;
+        if(document.getElementById('aiQueueTotal')) document.getElementById('aiQueueTotal').innerText = q1+q2+q3;
+        if(document.getElementById('q1Count')) document.getElementById('q1Count').innerText = q1;
+        if(document.getElementById('q2Count')) document.getElementById('q2Count').innerText = q2;
+        if(document.getElementById('q3Count')) document.getElementById('q3Count').innerText = q3;
+        if(document.getElementById('adminEmailQuotaText')) document.getElementById('adminEmailQuotaText').innerText = `${state.emailQuota.count} / 100`;
+      }
+    };
+    window.SmartEmailEngine = SmartEmailEngine;
+
+    // --- GESTIONE QUOTA EMAIL GIORNALIERA ---
+    async function checkAndIncrementQuota() {
+      const today = new Date().toLocaleDateString('it-IT');
+      const quotaRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'email_quota');
+      
+      try {
+        const snap = await getDoc(quotaRef);
+        let data = snap.exists() ? snap.data() : { date: today, count: 0 };
+        
+        if (data.date !== today) {
+          data = { date: today, count: 0 };
+        }
+        
+        if (data.count >= 95) { 
+          return false; 
+        }
+        
+        data.count++;
+        await setDoc(quotaRef, data);
+        return true; 
+      } catch (err) {
+        console.error("Quota error", err);
+        return true; 
+      }
+    }
+    window.checkAndIncrementQuota = checkAndIncrementQuota;
+
+    async function inviaEmailScript(url, payload) {
+      // Compatibilità con gli Apps Script storici: alcuni leggono code/dateStr/studyPath,
+      // altri codice_prenotazione/data/attivita.
+      const normalizedPayload = { ...(payload || {}) };
+      if (!normalizedPayload.codice_prenotazione && normalizedPayload.code) normalizedPayload.codice_prenotazione = normalizedPayload.code;
+      if (!normalizedPayload.data && normalizedPayload.dateStr) normalizedPayload.data = normalizedPayload.dateStr;
+      if (!normalizedPayload.attivita && normalizedPayload.studyPath) normalizedPayload.attivita = `Open Day - ${normalizedPayload.studyPath}`;
+      return fetch(url, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(normalizedPayload)
+      });
+    }
+    window.inviaEmailScript = inviaEmailScript;
+
+
+    // =========================
+    // LISTA D'ATTESA OPEN DAY
+    // FIFO, blocco per turno, scorrimento automatico e pannello docenti.
+    // =========================
+    const normalizeWaitlistText = (v) => String(v || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const waitlistStamp = (r) => Number(r?.waitlistRequestedAt || r?.timestamp || r?.createdAt || 0);
+    const isWaitlistRegistration = (r) => r?.type === WAITLIST_TYPE;
+    const waitlistQueueFor = (dateId, source = state.registrations) => source
+      .filter(r => r.dateId === dateId && isWaitlistRegistration(r))
+      .sort((a,b) => waitlistStamp(a) - waitlistStamp(b));
+    const isSeatActiveRegistration = (r) => {
+      if (!r || isWaitlistRegistration(r)) return false;
+      if (String(r.type || '').toLowerCase() === 'cancellazione') return false;
+      if (normalizeWaitlistText(r.status) === 'annullato') return false;
+      return true;
+    };
+    const activeRegistrationsFor = (dateId, source = state.registrations) => source
+      .filter(r => r.dateId === dateId && isSeatActiveRegistration(r));
+    const seatsOf = (r) => Math.max(1, Number(r?.totalPeople || 1) || 1);
+    const activeSeatsFor = (dateId, source = state.registrations) => activeRegistrationsFor(dateId, source)
+      .reduce((sum, r) => sum + seatsOf(r), 0);
+    const waitlistFitPlan = (dateId, availableSeats, source = state.registrations) => {
+      let remaining = Math.max(0, Number(availableSeats || 0));
+      const selected = [];
+      const waiting = [];
+      for (const reg of waitlistQueueFor(dateId, source)) {
+        const needed = seatsOf(reg);
+        if (needed <= remaining) {
+          selected.push(reg);
+          remaining -= needed;
+        } else {
+          waiting.push(reg);
+        }
+      }
+      return { selected, waiting, remaining };
+    };
+
+    function escWaitlist(v) {
+      return String(v ?? '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+
+    async function acquireOpenDayWaitlistLock(dateId) {
+      const ref = doc(db, 'artifacts', appId, 'public', 'data', WAITLIST_LOCK_COLLECTION, dateId);
+      try {
+        return await runTransaction(db, async tx => {
+          const snap = await tx.get(ref);
+          const data = snap.exists() ? snap.data() : {};
+          const now = Date.now();
+          if (Number(data.lockedUntil || 0) > now && data.owner !== waitlistOwnerId) return false;
+          tx.set(ref, { owner: waitlistOwnerId, lockedAt: now, lockedUntil: now + 15000 }, { merge: true });
+          return true;
+        });
+      } catch (e) {
+        console.warn('OpenDay waitlist: lock non acquisito', e);
+        return false;
+      }
+    }
+
+    async function releaseOpenDayWaitlistLock(dateId) {
+      try {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', WAITLIST_LOCK_COLLECTION, dateId), {
+          owner: '', lockedUntil: 0, releasedAt: Date.now()
+        }, { merge: true });
+      } catch (_) {}
+    }
+
+    async function uniqueOpenDayCode() {
+      for (let i = 0; i < 12; i++) {
+        const code = `LEVI-${Math.floor(100000 + Math.random() * 900000)}`;
+        const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', code));
+        if (!snap.exists()) return code;
+      }
+      return `LEVI-${String(Date.now()).slice(-6)}`;
+    }
+
+    async function generateWaitlistReceiptPDF(reg, position) {
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      pdf.setFillColor(76, 29, 149); pdf.rect(0, 0, 210, 38, 'F');
+      pdf.setTextColor(255,255,255); pdf.setFont('helvetica','bold'); pdf.setFontSize(20);
+      pdf.text('ITSCG "PRIMO LEVI" - SEREGNO', 105, 16, { align: 'center' });
+      pdf.setFontSize(11); pdf.text('ISCRIZIONE CON RISERVA - OPEN DAY', 105, 26, { align: 'center' });
+      pdf.setFillColor(250,245,255); pdf.setDrawColor(168,85,247); pdf.roundedRect(15,50,180,30,3,3,'FD');
+      pdf.setTextColor(88,28,135); pdf.setFontSize(13); pdf.text('NON È ANCORA UN PASS DI ACCESSO', 105, 62, {align:'center'});
+      pdf.setFont('helvetica','normal'); pdf.setFontSize(9);
+      pdf.text('Attendi una seconda e-mail di conferma: solo quella renderà definitiva la prenotazione.', 105, 71, {align:'center'});
+      pdf.setTextColor(15,23,42); pdf.setFont('helvetica','bold'); pdf.setFontSize(11);
+      const rows = [
+        ['Studente', `${reg.cognome || ''} ${reg.nome || ''}`.trim()],
+        ['Codice richiesta', reg.code],
+        ['Percorso', reg.studyPath],
+        ...(openDayLiceoPreferenceLabel(reg) ? [['Preferenza liceo', openDayLiceoPreferenceLabel(reg)]] : []),
+        ['Turno', reg.dateStr],
+        ['Persone richieste', String(reg.totalPeople || 1)],
+        ['Posizione indicativa', String(position || 'in aggiornamento')]
+      ];
+      let y = 96;
+      rows.forEach(([label, value]) => {
+        pdf.setFont('helvetica','bold'); pdf.setTextColor(100,116,139); pdf.text(`${label}:`, 22, y);
+        pdf.setFont('helvetica','normal'); pdf.setTextColor(15,23,42);
+        const lines = pdf.splitTextToSize(String(value || '-'), 105); pdf.text(lines, 72, y); y += Math.max(12, lines.length * 5 + 5);
+      });
+      pdf.setFillColor(254,242,242); pdf.setDrawColor(248,113,113); pdf.roundedRect(15,205,180,36,3,3,'FD');
+      pdf.setTextColor(153,27,27); pdf.setFont('helvetica','bold'); pdf.setFontSize(11); pdf.text('COME FUNZIONA', 22,216);
+      pdf.setFont('helvetica','normal'); pdf.setFontSize(8.5);
+      const note = 'La lista segue l’ordine cronologico compatibile con i posti realmente liberi. Se un gruppo richiede più posti di quelli disponibili resta in attesa; il sistema può ammettere la prima richiesta successiva che entra nella capienza, senza superare mai il limite del turno. La presente ricevuta non consente l’ingresso finché non arriva la conferma definitiva.';
+      pdf.text(pdf.splitTextToSize(note,160),22,224);
+      pdf.setFontSize(7.5); pdf.setTextColor(120,120,130); pdf.text(`Generato il ${new Date().toLocaleString('it-IT')}`,15,285);
+      return pdf.output('datauristring').split(',')[1];
+    }
+
+    async function queuePositionOpenDay(reg, source = state.registrations) {
+      const q = waitlistQueueFor(reg.dateId, source);
+      const idx = q.findIndex(x => x.code === reg.code);
+      return idx >= 0 ? idx + 1 : null;
+    }
+
+    async function sendOpenDayWaitlistEmail(reg, position) {
+      try {
+        const pdfBase64 = await generateWaitlistReceiptPDF(reg, position);
+        await window.inviaEmailScript(CONFIRM_SCRIPT_URL, {
+          ...reg,
+          pdfBase64,
+          type: 'iscrizione_con_riserva',
+          stato: 'ISCRIZIONE CON RISERVA',
+          posizione_lista: position || '',
+          subject: `Open Day Primo Levi - Iscrizione con riserva ${reg.code}`,
+          oggetto: `Open Day Primo Levi - Iscrizione con riserva ${reg.code}`,
+          message: `La richiesta ${reg.code} è stata inserita in lista d'attesa. Posizione indicativa: ${position || 'in aggiornamento'}. Attendere la conferma definitiva.`,
+          messaggio: `La richiesta ${reg.code} è stata inserita in lista d'attesa. Posizione indicativa: ${position || 'in aggiornamento'}. Attendere la conferma definitiva.`
+        });
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', reg.code), {
+          waitlistEmailSentAt: Date.now()
+        }).catch(() => {});
+      } catch (e) {
+        console.warn('OpenDay waitlist: e-mail riserva non completata', e);
+      }
+    }
+
+    async function sendOpenDayPromotionEmail(reg) {
+      try {
+        const pdfBase64 = await window.generateReceiptPDF(reg, reg.code);
+        await window.inviaEmailScript(CONFIRM_SCRIPT_URL, {
+          ...reg,
+          pdfBase64,
+          type: 'ammesso_da_scorrimento',
+          stato: 'AMMESSO DA SCORRIMENTO',
+          subject: `Open Day Primo Levi - Posto assegnato dalla lista d'attesa ${reg.code}`,
+          oggetto: `Open Day Primo Levi - Posto assegnato dalla lista d'attesa ${reg.code}`,
+          message: `Il posto è stato assegnato automaticamente dalla lista d'attesa. La prenotazione ${reg.code} è ora confermata.`,
+          messaggio: `Il posto è stato assegnato automaticamente dalla lista d'attesa. La prenotazione ${reg.code} è ora confermata.`
+        });
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', reg.code), {
+          passSentDate: new Date().toLocaleString('it-IT'),
+          waitlistPromotionEmailSentAt: Date.now()
+        }).catch(() => {});
+      } catch (e) {
+        console.warn('OpenDay waitlist: e-mail promozione non completata', e);
+      }
+    }
+
+    async function promoteOpenDayWaitlist(dateId) {
+      if (!dateId) return false;
+      const locked = await acquireOpenDayWaitlistLock(dateId);
+      if (!locked) return false;
+      const promoted = [];
+      try {
+        let slot = state.dates.find(d => d.id === dateId);
+        const slotSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'dates', dateId));
+        if (slotSnap.exists()) slot = { id: slotSnap.id, ...slotSnap.data() };
+        if (!slot) return false;
+
+        const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'registrations'));
+        const fresh = []; snap.forEach(d => fresh.push({ id: d.id, ...d.data() }));
+        const maxSeats = Math.max(1, Number(slot.maxSeats || 1));
+        let occupied = activeSeatsFor(dateId, fresh);
+        let available = Math.max(0, maxSeats - occupied);
+        const queue = waitlistQueueFor(dateId, fresh);
+        const originalPosition = new Map(queue.map((r, i) => [r.code, i + 1]));
+
+        for (const queued of queue) {
+          if (available <= 0) break;
+          const ref = doc(db, 'artifacts', appId, 'public', 'data', 'registrations', queued.code);
+          const liveSnap = await getDoc(ref);
+          if (!liveSnap.exists()) continue;
+          const live = { id: liveSnap.id, ...liveSnap.data() };
+          if (!isWaitlistRegistration(live) || live.dateId !== dateId) continue;
+
+          const needed = seatsOf(live);
+          if (needed > maxSeats || needed > available) continue;
+
+          // Invariante assoluta: l'ammissione è possibile solo se i posti occupati
+          // dopo la promozione restano <= capienza autorizzata del turno.
+          if (occupied + needed > maxSeats) continue;
+
+          const patch = {
+            type: ACTIVE_TYPE,
+            status: 'Iscritto',
+            iscrizioneConRiserva: false,
+            waitlistPromotedAt: Date.now(),
+            waitlistPromotionStatus: 'Ammesso da scorrimento',
+            waitlistPromotionSource: 'automatico_capienza_compatibile',
+            waitlistPositionAtPromotion: originalPosition.get(live.code) || null,
+            waitlistSeatsAtPromotion: needed,
+            waitlistAvailableBeforePromotion: available
+          };
+          await updateDoc(ref, patch);
+          promoted.push({ ...live, ...patch });
+          occupied += needed;
+          available = Math.max(0, maxSeats - occupied);
+        }
+      } finally {
+        await releaseOpenDayWaitlistLock(dateId);
+      }
+
+      for (const reg of promoted) await sendOpenDayPromotionEmail(reg);
+      if (promoted.length) {
+        const people = promoted.reduce((sum, r) => sum + seatsOf(r), 0);
+        window.showToast?.(`${promoted.length} richiesta/e (${people} persone) ammesse automaticamente senza superare la capienza.`, 'info');
+      }
+      return promoted.length > 0;
+    }
+    window.promoteOpenDayWaitlist = promoteOpenDayWaitlist;
+
+    async function reconcileAllOpenDayWaitlists() {
+      for (const d of state.dates) await promoteOpenDayWaitlist(d.id).catch(() => false);
+      renderOpenDayWaitlistAdmin();
+      window.renderHomeDates?.();
+    }
+    window.reconcileAllOpenDayWaitlists = reconcileAllOpenDayWaitlists;
+
+    function scheduleOpenDayWaitlistReconcile() {
+      clearTimeout(openDayWaitlistReconcileTimer);
+      openDayWaitlistReconcileTimer = setTimeout(() => reconcileAllOpenDayWaitlists().catch(() => {}), 450);
+    }
+
+    function setOpenDayBookingMode(isWait) {
+      openDayWaitlistMode = !!isWait;
+      const btn = document.getElementById('btnSubmitBooking');
+      if (btn) {
+        btn.innerHTML = isWait
+          ? '<i data-lucide="clock-3" class="w-5 h-5"></i> Inserisci in Lista d\'attesa'
+          : '<i data-lucide="check-circle" class="w-5 h-5"></i> Conferma Iscrizione';
+        btn.className = isWait
+          ? 'w-full sm:w-2/3 py-3.5 bg-violet-600 hover:bg-violet-500 text-white font-black rounded-xl text-sm uppercase tracking-widest shadow-xl transition flex items-center justify-center gap-2'
+          : 'w-full sm:w-2/3 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-black rounded-xl text-sm uppercase tracking-widest shadow-xl transition flex items-center justify-center gap-2';
+      }
+      const box = document.getElementById('openDayWaitlistBookingNotice');
+      if (box) box.remove();
+      if (isWait) {
+        const info = document.getElementById('lblBookingAula')?.parentElement;
+        if (info) info.insertAdjacentHTML('afterend', '<div id="openDayWaitlistBookingNotice" class="p-4 rounded-2xl border border-violet-200 bg-violet-50 text-violet-900 text-xs font-bold">Posti esauriti o coda già attiva: la richiesta sarà registrata <strong>con riserva</strong> e seguirà l’ordine cronologico. Non riceverai un pass valido finché non sarai ammesso dallo scorrimento.</div>');
+      }
+      try { lucide.createIcons(); } catch(e) {}
+    }
+
+    function startWaitlistProcess(sid) {
+      window.startBookingProcess(sid);
+      setOpenDayBookingMode(true);
+    }
+    window.startWaitlistProcess = startWaitlistProcess;
+
+    function prepareOpenDayConfirmation(reg) {
+      const header = document.querySelector('#sectionConfirmation .bg-gradient-to-tr');
+      const title = document.querySelector('#sectionConfirmation h3');
+      const status = document.getElementById('confirmationEmailStatus');
+      const download = document.querySelector('#sectionConfirmation button[onclick="window.downloadTicketPDF()"]');
+      if (isWaitlistRegistration(reg)) {
+        if (header) {
+          header.classList.remove('from-emerald-500','to-teal-600');
+          header.classList.add('from-violet-600','to-purple-700');
+        }
+        if (title) title.textContent = 'Iscrizione con Riserva';
+        if (status) status.textContent = 'Sei in lista d’attesa. Riceverai una seconda e-mail solo se il posto viene assegnato.';
+        if (download) {
+          download.innerHTML = '<i data-lucide="download" class="w-5 h-5"></i><span>Scarica Ricevuta di Riserva</span>';
+          download.classList.remove('bg-indigo-600','hover:bg-indigo-500');
+          download.classList.add('bg-violet-600','hover:bg-violet-500');
+        }
+      } else {
+        if (header) {
+          header.classList.remove('from-violet-600','to-purple-700');
+          header.classList.add('from-emerald-500','to-teal-600');
+        }
+        if (title) title.textContent = reg.waitlistPromotedAt ? 'Ammesso da Scorrimento!' : 'Prenotazione Confermata!';
+        if (status) status.textContent = reg.waitlistPromotedAt ? 'Il posto è stato assegnato dalla lista d’attesa. Il pass è ora valido.' : "L'iscrizione è immediata. L'e-mail di riepilogo è in arrivo.";
+        if (download) {
+          download.innerHTML = '<i data-lucide="download" class="w-5 h-5"></i><span>Scarica il Pass PDF</span>';
+          download.classList.remove('bg-violet-600','hover:bg-violet-500');
+          download.classList.add('bg-indigo-600','hover:bg-indigo-500');
+        }
+      }
+      try { lucide.createIcons(); } catch(e) {}
+    }
+
+    function ensureOpenDayWaitlistAdminUI() {
+      const regBtn = document.querySelector('button[onclick="window.switchAdminTab(\'tabRegistrations\')"]');
+      if (regBtn && !document.getElementById('btnOpenDayWaitlistTab')) {
+        const b = document.createElement('button');
+        b.id = 'btnOpenDayWaitlistTab';
+        b.type = 'button';
+        b.className = 'px-5 py-2.5 bg-violet-600 text-white font-bold rounded-xl text-xs shadow-sm uppercase tracking-wider';
+        b.innerHTML = '<span>Lista d\'attesa</span> <span id="adminWaitlistBadge" class="ml-1 bg-white/20 px-1.5 py-0.5 rounded">0</span>';
+        b.onclick = () => window.switchAdminTab('tabWaitlist');
+        regBtn.insertAdjacentElement('afterend', b);
+      }
+      const admin = document.getElementById('sectionAdmin');
+      if (admin && !document.getElementById('tabWaitlist')) {
+        const section = document.createElement('div');
+        section.id = 'tabWaitlist';
+        section.className = 'hidden space-y-6';
+        section.innerHTML = `
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="glass-card p-5 rounded-2xl border border-violet-200 bg-white"><p class="text-[10px] uppercase font-black text-violet-600">In lista d'attesa</p><p id="odWaitRows" class="text-3xl font-black text-violet-950">0</p></div>
+            <div class="glass-card p-5 rounded-2xl border border-purple-200 bg-white"><p class="text-[10px] uppercase font-black text-purple-600">Persone in attesa</p><p id="odWaitPeople" class="text-3xl font-black text-purple-950">0</p></div>
+            <div class="glass-card p-5 rounded-2xl border border-fuchsia-200 bg-white"><p class="text-[10px] uppercase font-black text-fuchsia-600">Ammessi da scorrimento</p><p id="odWaitPromoted" class="text-3xl font-black text-fuchsia-950">0</p></div>
+          </div>
+          <div class="glass-card p-6 rounded-3xl border border-violet-200 bg-white space-y-4">
+            <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-3">
+              <div><h3 class="text-xl font-black text-violet-950 font-outfit">Lista d'attesa Open Day</h3><p class="text-xs text-slate-500 font-bold mt-1">Ordine cronologico compatibile con la capienza: un gruppo viene ammesso solo se entra nei posti liberi. I gruppi troppo grandi restano in coda e non causano mai sovrannumero.</p></div>
+              <button onclick="window.reconcileAllOpenDayWaitlists()" class="px-4 py-2.5 bg-violet-600 hover:bg-violet-500 text-white font-black rounded-xl text-xs uppercase tracking-wider">Ricalcola scorrimento</button>
+            </div>
+            <div class="grid md:grid-cols-2 gap-3">
+              <select id="waitlistDateFilter" onchange="window.renderOpenDayWaitlistAdmin()" class="p-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold"><option value="all">Tutti i turni</option></select>
+              <select id="waitlistPathFilter" onchange="window.renderOpenDayWaitlistAdmin()" class="p-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold"><option value="all">Tutti gli indirizzi</option></select>
+            </div>
+            <div class="overflow-x-auto border border-slate-200 rounded-2xl">
+              <table class="w-full text-left text-xs min-w-[900px]"><thead class="bg-violet-50 text-violet-950"><tr><th class="p-3">Pos.</th><th class="p-3">Codice</th><th class="p-3">Studente</th><th class="p-3">Contatto</th><th class="p-3">Persone</th><th class="p-3">Turno</th><th class="p-3">Indirizzo</th><th class="p-3">Preferenza liceo</th></tr></thead><tbody id="openDayWaitlistTableBody"></tbody></table>
+            </div>
+          </div>`;
+        admin.appendChild(section);
+      }
+    }
+
+    function renderOpenDayWaitlistAdmin() {
+      ensureOpenDayWaitlistAdminUI();
+      const waitsAll = state.registrations.filter(isWaitlistRegistration).sort((a,b) => waitlistStamp(a)-waitlistStamp(b));
+      const promoted = state.registrations.filter(r => !!r.waitlistPromotedAt || r.waitlistPromotionStatus === 'Ammesso da scorrimento');
+      const badge = document.getElementById('adminWaitlistBadge'); if (badge) badge.textContent = String(waitsAll.length);
+      const rowsEl = document.getElementById('odWaitRows'); if (rowsEl) rowsEl.textContent = String(waitsAll.length);
+      const peopleEl = document.getElementById('odWaitPeople'); if (peopleEl) peopleEl.textContent = String(waitsAll.reduce((s,r)=>s+seatsOf(r),0));
+      const promEl = document.getElementById('odWaitPromoted'); if (promEl) promEl.textContent = String(promoted.length);
+
+      const dateFilter = document.getElementById('waitlistDateFilter');
+      const pathFilter = document.getElementById('waitlistPathFilter');
+      if (dateFilter) {
+        const keep = dateFilter.value || 'all';
+        dateFilter.innerHTML = '<option value="all">Tutti i turni</option>' + state.dates
+          .slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)) || String(a.timeSlot).localeCompare(String(b.timeSlot)))
+          .map(d=>`<option value="${escWaitlist(d.id)}">${new Date(d.date).toLocaleDateString('it-IT')} · ${escWaitlist(d.timeSlot)}</option>`).join('');
+        if ([...dateFilter.options].some(o=>o.value===keep)) dateFilter.value = keep;
+      }
+      if (pathFilter) {
+        const keep = pathFilter.value || 'all';
+        const paths = [...new Set(state.dates.map(d=>d.studyPath).filter(Boolean))].sort();
+        pathFilter.innerHTML = '<option value="all">Tutti gli indirizzi</option>' + paths.map(p=>`<option value="${escWaitlist(p)}">${escWaitlist(p)}</option>`).join('');
+        if ([...pathFilter.options].some(o=>o.value===keep)) pathFilter.value = keep;
+      }
+      const df = dateFilter?.value || 'all';
+      const pf = pathFilter?.value || 'all';
+      const waits = waitsAll.filter(r => (df==='all' || r.dateId===df) && (pf==='all' || r.studyPath===pf));
+      const body = document.getElementById('openDayWaitlistTableBody');
+      if (body) body.innerHTML = waits.map(r => {
+        const pos = waitlistQueueFor(r.dateId).findIndex(x=>x.code===r.code)+1;
+        return `<tr class="border-t border-slate-100"><td class="p-3"><span class="inline-flex min-w-9 justify-center bg-violet-100 text-violet-800 font-black px-2 py-1 rounded-lg">${pos}</span></td><td class="p-3 font-mono font-black text-indigo-700">${escWaitlist(r.code)}</td><td class="p-3 font-black text-slate-900">${escWaitlist(r.cognome)} ${escWaitlist(r.nome)}</td><td class="p-3"><div>${escWaitlist(r.email)}</div><div class="text-[10px] text-slate-400">${new Date(waitlistStamp(r)).toLocaleString('it-IT')}</div></td><td class="p-3 font-black">${seatsOf(r)}</td><td class="p-3">${escWaitlist(r.dateStr)}</td><td class="p-3 max-w-[260px]">${escWaitlist(r.studyPath)}</td><td class="p-3 max-w-[280px] font-bold text-indigo-800">${escWaitlist(openDayLiceoPreferenceLabel(r) || '—')}</td></tr>`;
+      }).join('') || '<tr><td colspan="8" class="p-8 text-center text-slate-400 font-bold">Nessuna iscrizione in lista d\'attesa.</td></tr>';
+    }
+    window.renderOpenDayWaitlistAdmin = renderOpenDayWaitlistAdmin;
+
+    setTimeout(() => { ensureOpenDayWaitlistAdminUI(); renderOpenDayWaitlistAdmin(); }, 0);
+
+    function navigateTo(t) {
+      state.currentView = t; 
+      ['sectionHome','sectionBooking','sectionConfirmation','sectionLogin','sectionAdmin'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
+      
+      if (t === 'home') document.getElementById('sectionHome').classList.remove('hidden'); 
+      else if (t === 'booking') document.getElementById('sectionBooking').classList.remove('hidden');
+      else if (t === 'confirmation') document.getElementById('sectionConfirmation').classList.remove('hidden');
+      else if (t === 'admin') {
+        if (state.isAdminAuthed) { 
+          document.getElementById('sectionAdmin').classList.remove('hidden'); 
+          window.updateStatistics();
+          window.renderRegistrations(); 
+          window.renderAdminDatesList(); 
+          checkAndSendPromemoria(); 
+          window.SmartEmailEngine.start();
+        }
+        else document.getElementById('sectionLogin').classList.remove('hidden'); 
+      }
+      window.scrollTo(0,0);
+      try { lucide.createIcons(); } catch(e) {}
+    }
+    window.navigateTo = navigateTo;
+
+    function logoutAdmin() { state.isAdminAuthed = false; window.navigateTo('home'); showToast("Uscita effettuata. Il motore e-mail resta attivo in sicurezza.", "info"); }
+    window.logoutAdmin = logoutAdmin;
+
+    function scrollToSection(id) { window.navigateTo('home'); setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' }), 150); }
+    window.scrollToSection = scrollToSection;
+
+    function toggleAdminPanel() { state.currentView === 'admin' ? window.navigateTo('home') : window.navigateTo('admin'); }
+    window.toggleAdminPanel = toggleAdminPanel;
+
+    function switchAdminTab(id) { ['tabRegistrations','tabLiveScanner','tabSettings','tabStatistics','tabSmartEmail','tabWaitlist'].forEach(t => document.getElementById(t)?.classList.add('hidden')); ensureOpenDayWaitlistAdminUI(); document.getElementById(id)?.classList.remove('hidden'); if(id === 'tabWaitlist') renderOpenDayWaitlistAdmin(); }
+    window.switchAdminTab = switchAdminTab;
+    
+    function openRecoveryModal() { document.getElementById('recoveryModalFormView').classList.remove('hidden'); document.getElementById('recoveryModalSuccessView').classList.add('hidden'); document.getElementById('recoveryModal').classList.remove('hidden'); }
+    window.openRecoveryModal = openRecoveryModal;
+
+    function openCancelModal() { document.getElementById('cancelModalFormView').classList.remove('hidden'); document.getElementById('cancelModalSuccessView').classList.add('hidden'); document.getElementById('cancelModal').classList.remove('hidden'); }
+    window.openCancelModal = openCancelModal;
+
+    function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+    window.closeModal = closeModal;
+
+    async function startApp() {
+      try { await signInAnonymously(auth); } catch(e) {}
+      onAuthStateChanged(auth, u => {
+        state.user = u;
+        if(u) {
+          setupRealtimeListeners();
+          // In modalita Scanner il motore resta continuo anche senza area Docenti.
+          // Sulla home pubblica non elaboriamo code amministrative.
+          if (window.location.search.includes('scanner=true')) window.SmartEmailEngine.start();
+        }
+      });
+      if (window.location.search.includes('scanner=true')) window.openCompanionScannerMode();
+    }
+
+    const defaultDates = [
+      { id: "date-1", date: "2026-11-14", timeSlot: "09:00 - 11:00", aula: "Aula Magna Sede", maxSeats: 120, studyPath: "LS - Liceo Scientifico opzione Scienze Applicate e Liceo Scienze Applicate - Curvatura Economica" },
+      { id: "date-2", date: "2026-11-14", timeSlot: "11:30 - 13:30", aula: "Aula Magna Sede", maxSeats: 120, studyPath: "LS - Liceo Scientifico opzione Scienze Applicate e Liceo Scienze Applicate - Curvatura Economica" },
+      { id: "date-3", date: "2026-11-28", timeSlot: "09:00 - 11:00", aula: "Aula Magna Sede", maxSeats: 120, studyPath: "LS - Liceo Scientifico opzione Scienze Applicate e Liceo Scienze Applicate - Curvatura Economica" },
+      { id: "date-4", date: "2026-11-28", timeSlot: "11:30 - 13:30", aula: "Aula Magna Sede", maxSeats: 120, studyPath: "LS - Liceo Scientifico opzione Scienze Applicate e Liceo Scienze Applicate - Curvatura Economica" },
+      { id: "date-5", date: "2026-12-14", timeSlot: "09:00 - 11:00", aula: "Laboratori Sede", maxSeats: 100, studyPath: "LOG - Logistica e Trasporti" },
+      { id: "date-6", date: "2026-12-14", timeSlot: "11:30 - 13:30", aula: "Laboratori Sede", maxSeats: 100, studyPath: "CAT - Costruzioni, Ambiente e Territorio" }
+    ];
+
+    function setupRealtimeListeners() {
+      onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'dates'), s => {
+        state.dates = []; 
+        if(s.empty) {
+          defaultDates.forEach(d => setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'dates', d.id), d));
+        } else {
+          s.forEach(d => { const raw = {id: d.id, ...d.data()}; state.dates.push({...raw, studyPath: canonicalOpenDayStudyPath(raw.studyPath)}); }); 
+        }
+        window.renderHomeDates(); 
+        if (state.currentView === 'admin') window.renderAdminDatesList();
+        populateFilters();
+        scheduleOpenDayWaitlistReconcile();
+      });
+      onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'registrations'), s => {
+        state.registrations = []; 
+        s.forEach(d => { const raw = {id: d.id, ...d.data()}; state.registrations.push({...raw, studyPath: canonicalOpenDayStudyPath(raw.studyPath)}); }); 
+        window.renderHomeDates(); 
+        if (state.currentView === 'admin') { window.renderRegistrations(); window.updateStatistics(); window.renderAdminDatesList(); renderOpenDayWaitlistAdmin(); }
+        scheduleOpenDayWaitlistReconcile();
+      });
+      onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'scanners'), s => {
+        state.devices = [];
+        s.forEach(d => state.devices.push({id: d.id, ...d.data()}));
+        if(state.currentView === 'admin') window.renderConnectedDevices();
+      });
+      onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'email_quota'), snap => {
+        if(snap.exists()) {
+          const today = new Date().toLocaleDateString('it-IT');
+          state.emailQuota = snap.data().date === today ? snap.data() : { date: today, count: 0 };
+          if(state.currentView === 'admin') window.SmartEmailEngine.updateDashboard();
+        }
+      });
+      getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'promemoria')).then(docSnap => {
+        if (docSnap.exists() && document.getElementById('settingsPromemoriaDays')) {
+          document.getElementById('settingsPromemoriaDays').value = docSnap.data().days || 7;
+          window.promemoriaDays = docSnap.data().days || 7;
+        }
+      });
+    }
+
+    function populateFilters() {
+      const adminFilter = document.getElementById('filterDateSelect');
+      const userPathFilter = document.getElementById('userPathFilter');
+      if(adminFilter) {
+        adminFilter.innerHTML = '<option value="all">Tutti i turni</option>';
+        state.dates.forEach(d => adminFilter.innerHTML += `<option value="${d.id}">${new Date(d.date).toLocaleDateString('it-IT')} - ${d.timeSlot}</option>`);
+      }
+      if(userPathFilter) {
+        const paths = [...new Set(state.dates.map(d => d.studyPath))].sort();
+        userPathFilter.innerHTML = '<option value="all">Tutti gli indirizzi disponibili</option>';
+        paths.forEach(p => userPathFilter.innerHTML += `<option value="${p}">${p}</option>`);
+      }
+    }
+
+    function renderHomeDates() {
+      const container = document.getElementById('groupedDatesGrid');
+      const filterVal = document.getElementById('userPathFilter')?.value || 'all';
+      if(!container) return;
+      const filteredDates = filterVal === 'all' ? state.dates : state.dates.filter(d => d.studyPath === filterVal);
+      const groups = {};
+      filteredDates.forEach(d => { if(!groups[d.date]) groups[d.date] = []; groups[d.date].push(d); });
+      const sortedDates = Object.keys(groups).sort((a, b) => new Date(a) - new Date(b));
+      container.innerHTML = sortedDates.map(dateVal => {
+        const sessions = groups[dateVal].sort((a, b) => a.timeSlot === b.timeSlot ? a.studyPath.localeCompare(b.studyPath) : a.timeSlot.localeCompare(b.timeSlot));
+        const slotsHtml = sessions.map(s => {
+          const maxSeats = Math.max(1, Number(s.maxSeats || 1));
+          const activeSeats = activeSeatsFor(s.id);
+          const queue = waitlistQueueFor(s.id);
+          const waitPeople = queue.reduce((sum, r) => sum + seatsOf(r), 0);
+          const available = Math.max(0, maxSeats - activeSeats);
+          const fitPlan = waitlistFitPlan(s.id, available);
+          const fitPeople = fitPlan.selected.reduce((sum, r) => sum + seatsOf(r), 0);
+          const mustWait = queue.length > 0 || available <= 0;
+          let statusLabel = '';
+          if (!queue.length && available > 0) statusLabel = `🔥 ${available} POSTI LIBERI`;
+          else if (!queue.length) statusLabel = '⛔ POSTI ESAURITI';
+          else if (available <= 0) statusLabel = `⏳ COMPLETO • CODA ${queue.length} RICH. / ${waitPeople} PERSONE`;
+          else if (fitPlan.selected.length) statusLabel = `⏳ ${available} LIBERI • ${fitPlan.selected.length} RICH. COMPATIBILI (${fitPeople} POSTI)`;
+          else statusLabel = `⏳ ${available} LIBERI • GRUPPI IN ATTESA NON COMPATIBILI`;
+          const statusClass = mustWait ? 'text-violet-700 bg-violet-50 border-violet-200' : 'text-emerald-600 bg-emerald-50 border-emerald-200';
+          return `
+            <div class="p-4 bg-white/80 rounded-xl border border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 text-xs font-semibold shadow-sm transition hover:border-indigo-300">
+              <div class="w-full sm:w-2/3">
+                <span class="font-black text-slate-900 block text-[12px] sm:text-[13px] leading-tight mb-1 whitespace-normal">${s.studyPath}</span>
+                <span class="inline-block text-[10px] text-indigo-700 font-bold bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-lg mb-1">Ore ${s.timeSlot} • Sede: ${s.aula}</span>
+                <span class="block text-[10px] text-slate-600 font-black mt-1">Capienza turno: ${activeSeats}/${maxSeats} occupati • ${available} liberi${queue.length ? ` • Lista d'attesa: ${queue.length} richieste / ${waitPeople} persone` : ''}</span>
+              </div>
+              <div class="flex flex-col sm:items-end gap-2 w-full sm:w-auto">
+                <span class="text-[9px] font-black border px-2 py-1.5 rounded-lg whitespace-normal text-center ${statusClass}">${statusLabel}</span>
+                <button onclick="${mustWait ? `window.startWaitlistProcess('${s.id}')` : `window.startBookingProcess('${s.id}')`}" class="w-full sm:w-auto px-4 py-2.5 ${mustWait?'bg-violet-600 hover:bg-violet-500 text-white':'bg-indigo-600 hover:bg-indigo-500 text-white'} rounded-lg uppercase font-black text-[10px] shadow-sm transition tracking-wider flex items-center justify-center gap-1 shrink-0">${mustWait ? `LISTA D'ATTESA${queue.length ? ` (${queue.length})` : ''}` : 'ISCRIVITI <i data-lucide="arrow-right" class="w-3 h-3"></i>'}</button>
+              </div>
+            </div>`;
+        }).join('');
+        return `<div class="glass-card p-5 rounded-3xl border space-y-4 shadow-sm hover:shadow-md transition"><h4 class="text-lg font-black text-indigo-950 font-outfit uppercase border-b border-slate-200 pb-2">${new Date(dateVal).toLocaleDateString('it-IT', {weekday:'long', day:'numeric', month:'long', year:'numeric'})}</h4><div class="space-y-3">${slotsHtml}</div></div>`;
+      }).join('');
+      try { lucide.createIcons(); } catch(e){}
+    }
+    window.renderHomeDates = renderHomeDates;
+
+    function updateStatistics() {
+      const ctxIndirizzi = document.getElementById('chartIndirizzi');
+      const ctxStato = document.getElementById('chartStato');
+      if (!ctxIndirizzi || !ctxStato) return;
+
+      const pathsCount = {};
+      const statusCount = { 'Iscritto': 0, 'Ammesso': 0, 'Concluso': 0, 'Assente': 0 };
+      let totalPeople = 0;
+      let totalInclusione = 0;
+      const activeStatsRegistrations = state.registrations.filter(r => !isWaitlistRegistration(r));
+
+      activeStatsRegistrations.forEach(r => {
+         const p = r.studyPath.split(' - ')[0] || r.studyPath; 
+         pathsCount[p] = (pathsCount[p] || 0) + parseInt(r.totalPeople || 1);
+         if(statusCount[r.status] !== undefined) statusCount[r.status]++;
+         totalPeople += parseInt(r.totalPeople || 1);
+         if(r.inclusione) totalInclusione++;
+      });
+
+      const iscrittiEl = document.getElementById('statTotalIscritti');
+      if (iscrittiEl) {
+        iscrittiEl.innerText = activeStatsRegistrations.length;
+        document.getElementById('statTotalEntrati').innerText = statusCount['Ammesso'];
+        document.getElementById('statTotalCertificati').innerText = statusCount['Concluso'];
+        document.getElementById('statTotalAssenti').innerText = statusCount['Assente'];
+        document.getElementById('statTotalInclusione').innerText = totalInclusione;
+      }
+
+      let maxPath = "-"; let maxVal = 0;
+      for (const [p, v] of Object.entries(pathsCount)) { if (v > maxVal) { maxVal = v; maxPath = p; } }
+      const totalRegistrations = activeStatsRegistrations.length;
+      const presenti = statusCount['Ammesso'] + statusCount['Concluso'];
+      const tassoPresenza = totalRegistrations > 0 ? Math.round((presenti / totalRegistrations) * 100) : 0;
+
+      const txtIndirizzi = document.getElementById('statsTextIndirizzi');
+      if(txtIndirizzi) txtIndirizzi.innerHTML = `L'indirizzo più richiesto attualmente è <strong>${maxPath}</strong> con <strong>${maxVal}</strong> posti totali bloccati.`;
+      
+      const txtPartecipazione = document.getElementById('statsTextPartecipazione');
+      if(txtPartecipazione) txtPartecipazione.innerHTML = `Tasso di affluenza reale in sede del <strong>${tassoPresenza}%</strong>. Sono stati erogati ad oggi <strong>${statusCount['Concluso']}</strong> certificati.`;
+
+      if(window.chartIndirizziInstance) window.chartIndirizziInstance.destroy();
+      window.chartIndirizziInstance = new Chart(ctxIndirizzi, {
+        type: 'doughnut',
+        data: { labels: Object.keys(pathsCount), datasets: [{ data: Object.values(pathsCount), backgroundColor: ['#4f46e5', '#10b981', '#f59e0b', '#14b8a6', '#d946ef', '#3b82f6'] }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { font: { size: 10 } } } } }
+      });
+
+      if(window.chartStatoInstance) window.chartStatoInstance.destroy();
+      window.chartStatoInstance = new Chart(ctxStato, {
+        type: 'bar',
+        data: { labels: Object.keys(statusCount), datasets: [{ label: 'Studenti', data: Object.values(statusCount), backgroundColor: ['#6366f1', '#3b82f6', '#10b981', '#f43f5e'], borderRadius: 6 }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+      });
+    }
+    window.updateStatistics = updateStatistics;
+
+    function startBookingProcess(sid) {
+      const target = state.dates.find(x => x.id === sid);
+      if (!target) return;
+      setOpenDayBookingMode(false);
+      document.getElementById('formEventId').value = sid;
+      document.getElementById('lblBookingPath').innerText = target.studyPath;
+      updateOpenDayLiceoPreferenceField(target.studyPath);
+      document.getElementById('lblBookingDate').innerText = `${new Date(target.date).toLocaleDateString('it-IT')} • Ore ${target.timeSlot}`;
+      document.getElementById('lblBookingAula').innerText = target.aula;
+      window.navigateTo('booking');
+    }
+    window.startBookingProcess = startBookingProcess;
+
+    function cancelBookingProcess() { openDayWaitlistMode = false; document.getElementById('bookingForm').reset(); window.navigateTo('home'); setTimeout(() => document.getElementById('datesSection')?.scrollIntoView({ behavior: 'smooth' }), 100); }
+    window.cancelBookingProcess = cancelBookingProcess;
+
+    function recalcTotalSeats() { document.getElementById('lblTotalFormSeats').innerText = parseInt(document.getElementById('formNumAlunni').value||1) + parseInt(document.getElementById('formNumAccompagnatori').value||0); }
+    window.recalcTotalSeats = recalcTotalSeats;
+
+    function resetAndGoHome() { openDayWaitlistMode = false; document.getElementById('bookingForm').reset(); window.navigateTo('home'); }
+    window.resetAndGoHome = resetAndGoHome;
+
+    function setProgress(percent, text) {
+      const c = document.getElementById('bookingProgressContainer');
+      const b = document.getElementById('bookingProgressBar');
+      const t = document.getElementById('bookingProgressText');
+      if(percent === 0) c.classList.remove('hidden');
+      if(b) b.style.width = percent + '%';
+      if(t) t.innerText = text;
+      if(percent === 100) setTimeout(()=>c.classList.add('hidden'), 1000);
+    }
+
+    async function handleBookingSubmit(e) {
+      e.preventDefault();
+      const targetSession = state.dates.find(x => x.id === document.getElementById('formEventId').value);
+      const submitBtn = document.getElementById('btnSubmitBooking');
+      if (!targetSession || !submitBtn) return showToast("Turno non disponibile.", "error");
+      if (submitBtn.dataset.saving === '1') return;
+      submitBtn.dataset.saving = '1'; submitBtn.disabled = true;
+      setProgress(0, "Controllo disponibilità e ordine di coda...");
+      const dateId = targetSession.id;
+      const locked = await acquireOpenDayWaitlistLock(dateId);
+      if (!locked) { submitBtn.dataset.saving = '0'; submitBtn.disabled = false; return showToast("Il turno è in aggiornamento. Riprova tra pochi secondi.", "warning"); }
+      try {
+        const cognome = toTitleCase(document.getElementById('formCognome').value.trim());
+        const nome = toTitleCase(document.getElementById('formNome').value.trim());
+        const email = document.getElementById('formEmail').value.trim();
+        const liceoPreference = isOpenDayLiceoPath(targetSession.studyPath) ? String(document.getElementById('formLiceoPreference')?.value || '').trim() : '';
+        if (isOpenDayLiceoPath(targetSession.studyPath) && !openDayLiceoPreferenceLabel(liceoPreference)) throw new Error('LICEO_PREFERENCE_REQUIRED');
+        const totalPeople = parseInt(document.getElementById('formNumAlunni').value || 1) + parseInt(document.getElementById('formNumAccompagnatori').value || 0);
+        const freshSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'registrations'));
+        const fresh = []; freshSnap.forEach(d => fresh.push({id:d.id, ...d.data()}));
+        const duplicate = fresh.some(r => r.dateId === dateId && normalizeWaitlistText(r.email) === normalizeWaitlistText(email) && normalizeWaitlistText(r.cognome) === normalizeWaitlistText(cognome) && normalizeWaitlistText(r.nome) === normalizeWaitlistText(nome));
+        if (duplicate) throw new Error('DUPLICATE');
+        const liveDateSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'dates', dateId));
+        const liveSession = liveDateSnap.exists() ? { ...targetSession, ...liveDateSnap.data(), id: dateId } : targetSession;
+        const maxSeats = Math.max(1, Number(liveSession.maxSeats || 1));
+        if (!Number.isFinite(totalPeople) || totalPeople < 1) throw new Error('INVALID_GROUP_SIZE');
+        if (totalPeople > maxSeats) throw new Error('GROUP_EXCEEDS_CAPACITY');
+        const activeSeats = activeSeatsFor(dateId, fresh);
+        const queue = waitlistQueueFor(dateId, fresh);
+        const shouldWait = openDayWaitlistMode || queue.length > 0 || (activeSeats + totalPeople > maxSeats);
+        const code = await uniqueOpenDayCode();
+        const timestamp = Date.now();
+        const regData = { code, cognome, nome, provenienza: toTitleCase(document.getElementById('formProvenienza').value.trim()), email, totalPeople, dateId: targetSession.id, studyPath: targetSession.studyPath, liceoPreference, dateStr: `${new Date(targetSession.date).toLocaleDateString('it-IT')} • ${targetSession.timeSlot}`, status: shouldWait ? 'Con riserva' : 'Iscritto', type: shouldWait ? WAITLIST_TYPE : ACTIVE_TYPE, inclusione: document.getElementById('formInclusione').checked, timestamp };
+        if (shouldWait) Object.assign(regData, { waitlistRequestedAt: timestamp, waitlistStatus: 'Iscrizione con riserva', iscrizioneConRiserva: true }); else regData.passSentDate = 'IN_CODA_Q1';
+        state.currentBooking = regData;
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', code), regData);
+        document.getElementById('ticketCode').innerText = code; document.getElementById('ticketStudent').innerText = `${regData.cognome} ${regData.nome}`; document.getElementById('ticketPath').innerText = openDayLiceoPreferenceLabel(regData) ? `${regData.studyPath}
+Preferenza: ${openDayLiceoPreferenceLabel(regData)}` : regData.studyPath; document.getElementById('ticketDate').innerText = regData.dateStr;
+        prepareOpenDayConfirmation(regData);
+        if (shouldWait) { const position = queue.length + 1; await sendOpenDayWaitlistEmail(regData, position); showToast(`Richiesta registrata con riserva. Posizione indicativa: ${position}.`, 'info'); } else await window.SmartEmailEngine.flushNow();
+        window.navigateTo('confirmation');
+      } catch(err) { console.error('OpenDay booking/waitlist', err); if (err.message === 'DUPLICATE') showToast("Esiste già una richiesta per questo studente nello stesso turno.", "error"); else if (err.message === 'LICEO_PREFERENCE_REQUIRED') showToast("Seleziona l'indirizzo liceale: Scienze Applicate oppure Curvatura Economica.", "error"); else if (err.message === 'GROUP_EXCEEDS_CAPACITY') showToast("Il numero di persone richiesto supera la capienza massima autorizzata per questo turno. Riduci il numero di posti.", "error"); else if (err.message === 'INVALID_GROUP_SIZE') showToast("Indica almeno una persona per la prenotazione.", "error"); else showToast("Errore durante il salvataggio. Riprova.", "error"); }
+      finally { await releaseOpenDayWaitlistLock(dateId); submitBtn.dataset.saving = '0'; submitBtn.disabled = false; setProgress(100, openDayWaitlistMode ? "Richiesta in lista registrata" : "Prenotazione registrata"); }
+    }
+    window.handleBookingSubmit = handleBookingSubmit;
+
+    async function downloadTicketPDF() {
+      if(!state.currentBooking) return;
+      showToast("Download PDF in corso...", "success");
+      try {
+        let b64, fileName;
+        if (isWaitlistRegistration(state.currentBooking)) { const pos = await queuePositionOpenDay(state.currentBooking); b64 = await generateWaitlistReceiptPDF(state.currentBooking, pos); fileName = `Riserva_OpenDay_${state.currentBooking.cognome}_${state.currentBooking.code}.pdf`; }
+        else { b64 = await window.generateReceiptPDF(state.currentBooking, state.currentBooking.code); fileName = `Pass_Levi_${state.currentBooking.cognome}.pdf`; }
+        const link = document.createElement('a'); link.href = 'data:application/pdf;base64,' + b64; link.download = fileName; link.click();
+      } catch(e) { showToast("Errore di generazione PDF.", "error"); }
+    }
+    window.downloadTicketPDF = downloadTicketPDF;
+
+    async function handleRecovery(e) {
+      e.preventDefault();
+      const codeTerm = document.getElementById('recoveryCode').value.trim(); const cogTerm = document.getElementById('recoveryCognome').value.trim().toLowerCase(); const nomTerm = document.getElementById('recoveryNome').value.trim().toLowerCase();
+      if (!codeTerm && (!cogTerm || !nomTerm)) return showToast("Inserisci il codice oppure Nome e Cognome.", "error");
+      const reg = codeTerm ? state.registrations.find(x => x.code === codeTerm.toUpperCase()) : state.registrations.find(x => x.cognome.toLowerCase() === cogTerm && x.nome.toLowerCase() === nomTerm);
+      if(!reg) return showToast("Prenotazione non trovata.", "error");
+      const btn = document.getElementById('btnSubmitRecovery'); btn.innerHTML = `<span class="animate-pulse">Invio in corso...</span>`; btn.disabled = true;
+      try {
+        if (isWaitlistRegistration(reg)) { const pos = await queuePositionOpenDay(reg); await sendOpenDayWaitlistEmail(reg, pos); const msg = document.getElementById('recoveryModalMessage'); if (msg) msg.textContent = `Ricevuta di riserva reinviata. Posizione indicativa attuale: ${pos || 'in aggiornamento'}.`; }
+        else { const pdfBase64 = await window.generateReceiptPDF(reg, reg.code); await window.inviaEmailScript(CONFIRM_SCRIPT_URL, { ...reg, pdfBase64, type: 'recupero' }); const msg = document.getElementById('recoveryModalMessage'); if (msg) msg.textContent = 'Il pass di prenotazione è stato reinviato via e-mail.'; }
+        document.getElementById('recoveryModalFormView').classList.add('hidden'); document.getElementById('recoveryModalSuccessView').classList.remove('hidden');
+      } catch(err) { showToast("Errore durante l'invio.", "error"); }
+      btn.innerHTML = `Invia Conferma via Email`; btn.disabled = false;
+    }
+    window.handleRecovery = handleRecovery;
+
+    async function handleCancellation(e) {
+      e.preventDefault();
+      const codeTerm = document.getElementById('cancelCode').value.trim(); const cogTerm = document.getElementById('cancelCognome').value.trim().toLowerCase(); const nomTerm = document.getElementById('cancelNome').value.trim().toLowerCase();
+      if (!codeTerm && (!cogTerm || !nomTerm)) return showToast("Inserisci il codice oppure Nome e Cognome.", "error");
+      const reg = codeTerm ? state.registrations.find(x => x.code === codeTerm.toUpperCase()) : state.registrations.find(x => x.cognome.toLowerCase() === cogTerm && x.nome.toLowerCase() === nomTerm);
+      if(!reg) return showToast("Nessuna prenotazione trovata.", "error");
+      const btn = document.getElementById('btnSubmitCancellation'); btn.innerHTML = `<span class="animate-pulse">Annullamento in corso...</span>`; btn.disabled = true;
+      try { await window.inviaEmailScript(CANCEL_SCRIPT_URL, reg); await window.triggerManualDelete(reg.code, true); document.getElementById('cancelModalFormView').classList.add('hidden'); document.getElementById('cancelModalSuccessView').classList.remove('hidden'); }
+      catch(err) { showToast("Errore durante l'annullamento.", "error"); }
+      btn.innerHTML = `Conferma Annullamento`; btn.disabled = false;
+    }
+    window.handleCancellation = handleCancellation;
+
+    function handleAdminLogin(e) { 
+      e.preventDefault(); 
+      if (document.getElementById('adminPasswordInput').value === 'admin') { 
+        state.isAdminAuthed = true; 
+        window.navigateTo('admin'); 
+        window.generateCompanionScannerQR(); 
+      } else {
+        showToast("Chiave errata", "error"); 
+      }
+    }
+    window.handleAdminLogin = handleAdminLogin;
+    
+    function openEditRegModal(code) {
+      const reg = state.registrations.find(r => r.code === code);
+      if(!reg) return;
+      document.getElementById('editRegCode').value = reg.code;
+      document.getElementById('editRegCognome').value = reg.cognome;
+      document.getElementById('editRegNome').value = reg.nome;
+      document.getElementById('editRegEmail').value = reg.email;
+      document.getElementById('editRegPosti').value = reg.totalPeople;
+      document.getElementById('editRegModal').classList.remove('hidden');
+    }
+    window.openEditRegModal = openEditRegModal;
+
+    async function saveEditReg(e) {
+      e.preventDefault();
+      const code = document.getElementById('editRegCode').value;
+      const current = state.registrations.find(r => r.code === code);
+      if (!current) return showToast("Iscrizione non trovata.", "error");
+      const newSeats = parseInt(document.getElementById('editRegPosti').value);
+      if (!Number.isFinite(newSeats) || newSeats < 1) return showToast("I posti devono essere almeno 1.", "error");
+      const dateId = current.dateId;
+      let locked = false;
+      try {
+        if (dateId) {
+          locked = await acquireOpenDayWaitlistLock(dateId);
+          if (!locked) throw new Error('LOCKED');
+        }
+        const freshSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'registrations'));
+        const fresh = []; freshSnap.forEach(d => fresh.push({ id: d.id, ...d.data() }));
+        const liveCurrent = fresh.find(r => r.code === code) || current;
+        if (dateId && !isWaitlistRegistration(liveCurrent)) {
+          const dateSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'dates', dateId));
+          const slot = dateSnap.exists() ? { id: dateSnap.id, ...dateSnap.data() } : state.dates.find(d => d.id === dateId);
+          if (!slot) throw new Error('DATE_NOT_FOUND');
+          const maxSeats = Math.max(1, Number(slot.maxSeats || 1));
+          const otherSeats = activeSeatsFor(dateId, fresh.filter(r => r.code !== code));
+          if (otherSeats + newSeats > maxSeats) throw new Error('CAPACITY_EXCEEDED');
+        }
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', code), {
+          cognome: toTitleCase(document.getElementById('editRegCognome').value.trim()),
+          nome: toTitleCase(document.getElementById('editRegNome').value.trim()),
+          email: document.getElementById('editRegEmail').value.trim(),
+          totalPeople: newSeats
+        });
+        showToast("Iscrizione modificata rispettando la capienza del turno!");
+        window.closeModal('editRegModal');
+      } catch(err) {
+        if (err.message === 'CAPACITY_EXCEEDED') showToast("Modifica bloccata: con questi posti il turno supererebbe la capienza autorizzata.", "error");
+        else if (err.message === 'LOCKED') showToast("Turno in aggiornamento. Riprova tra pochi secondi.", "warning");
+        else showToast("Errore durante la modifica.", "error");
+      } finally {
+        if (locked) await releaseOpenDayWaitlistLock(dateId);
+      }
+      if (dateId) await promoteOpenDayWaitlist(dateId).catch(() => false);
+    }
+    window.saveEditReg = saveEditReg;
+
+    function openEditDateModal(id) {
+      const d = state.dates.find(x => x.id === id);
+      if(!d) return;
+      document.getElementById('editDateId').value = d.id;
+      document.getElementById('editDateValue').value = d.date;
+      document.getElementById('editDateTime').value = d.timeSlot;
+      document.getElementById('editDateAula').value = d.aula;
+      document.getElementById('editDateSeats').value = d.maxSeats;
+      document.getElementById('editDatePath').value = d.studyPath;
+      document.getElementById('editDateModal').classList.remove('hidden');
+    }
+    window.openEditDateModal = openEditDateModal;
+
+    async function saveEditDate(e) {
+      e.preventDefault();
+      const id = document.getElementById('editDateId').value;
+      const newMaxSeats = parseInt(document.getElementById('editDateSeats').value);
+      if (!Number.isFinite(newMaxSeats) || newMaxSeats < 1) return showToast("La capienza deve essere almeno 1.", "error");
+      const locked = await acquireOpenDayWaitlistLock(id);
+      if (!locked) return showToast("Turno in aggiornamento. Riprova tra pochi secondi.", "warning");
+      try {
+        const freshSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'registrations'));
+        const fresh = []; freshSnap.forEach(d => fresh.push({ id: d.id, ...d.data() }));
+        const occupied = activeSeatsFor(id, fresh);
+        if (newMaxSeats < occupied) throw new Error('CAPACITY_BELOW_OCCUPIED');
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'dates', id), {
+          date: document.getElementById('editDateValue').value,
+          timeSlot: document.getElementById('editDateTime').value.trim(),
+          aula: document.getElementById('editDateAula').value.trim(),
+          maxSeats: newMaxSeats,
+          studyPath: canonicalOpenDayStudyPath(document.getElementById('editDatePath').value)
+        });
+        showToast(`Turno aggiornato: ${occupied}/${newMaxSeats} posti già occupati.`);
+        window.closeModal('editDateModal');
+      } catch(err) {
+        if (err.message === 'CAPACITY_BELOW_OCCUPIED') showToast("Capienza non valida: non puoi impostare meno posti di quelli già confermati.", "error");
+        else showToast("Errore durante la modifica.", "error");
+      } finally {
+        await releaseOpenDayWaitlistLock(id);
+      }
+      await promoteOpenDayWaitlist(id).catch(() => false);
+    }
+    window.saveEditDate = saveEditDate;
+
+    function renderRegistrations() {
+      const tbody = document.getElementById('registrationsTableBody');
+      if(!tbody) return;
+      const f = document.getElementById('filterDateSelect')?.value || 'all';
+      const list = f === 'all' ? state.registrations : state.registrations.filter(r => r.dateId === f);
+      
+      list.sort((a,b) => a.cognome.localeCompare(b.cognome));
+
+      tbody.innerHTML = list.map(r => {
+        const fmtDate = (dString) => {
+            if(!dString || dString === 'Mai') return 'Mai';
+            if(dString.includes('IN_CODA') || dString.includes('ELAB')) return '<span class="text-amber-500 font-black animate-pulse">IN CODA AI</span>';
+            try { let d = new Date(dString.split(', ')[0].split('/').reverse().join('-') + 'T' + dString.split(', ')[1]); return `${d.getDate().toString().padStart(2,'0')}/${(d.getMonth()+1).toString().padStart(2,'0')} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`; } catch(e){ return dString;}
+        };
+        return `
+        <tr id="riga-${r.code}" class="border-b border-slate-100 hover:bg-slate-50 transition text-xs font-semibold text-slate-700">
+          <td class="p-4 align-top">
+            <div class="font-mono font-bold text-indigo-600 text-sm">${r.code}</div>
+            <div class="text-[10px] text-slate-500 font-bold mt-1 bg-slate-200 inline-block px-2 py-0.5 rounded cella-stato">${r.status || 'Iscritto'}</div>
+          </td>
+          <td class="p-4 align-top font-black text-slate-900">${r.cognome.toUpperCase()} <br> ${r.nome.toUpperCase()}</td>
+          <td class="p-4 text-xs align-top">
+            <div class="font-semibold text-slate-700">${r.email}</div>
+            <div class="text-[11px] text-slate-600 font-bold mt-1">Posti: ${r.totalPeople} | Scuola: ${r.provenienza}</div>
+          </td>
+          <td class="p-4 text-xs align-top">
+            <div class="font-bold text-slate-800 text-[10px] truncate max-w-[150px] whitespace-normal" title="${r.studyPath}">${r.studyPath}</div>
+            ${openDayLiceoPreferenceLabel(r) ? `<div class="text-[10px] text-emerald-700 font-black mt-1 whitespace-normal max-w-[180px]">${openDayLiceoPreferenceLabel(r)}</div>` : ''}
+            <div class="text-[11px] text-indigo-600 font-black mt-1">${r.dateStr}</div>
+          </td>
+          <td class="p-4 text-center align-top"><input type="checkbox" disabled ${r.inclusione ? 'checked' : ''} class="w-4 h-4 rounded text-violet-600 focus:ring-violet-500 bg-white border-slate-300"></td>
+          <td class="p-4 text-center align-top">
+            <select onchange="window.updateDocField('${r.code}', 'status', this.value)" class="p-2 border border-slate-300 rounded-lg text-xs bg-white outline-none font-bold text-slate-800 shadow-sm cursor-pointer w-24">
+              <option value="Iscritto" ${r.status==='Iscritto'?'selected':''}>Iscritto</option>
+              <option value="Ammesso" ${r.status==='Ammesso'?'selected':''}>Ammesso</option>
+              <option value="Concluso" ${r.status==='Concluso'?'selected':''}>Concluso</option>
+              <option value="Assente" ${r.status==='Assente'?'selected':''}>Assente</option>
+            </select>
+          </td>
+          <td class="p-4 text-center align-top">
+            <div class="flex flex-col gap-1.5 w-[140px] mx-auto text-left">
+              <button onclick="window.triggerEmailQueue('${r.code}','pass')" class="bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-800 px-2 py-1.5 rounded-lg text-[9px] font-black flex justify-between items-center transition cursor-pointer"><span>1. Pass</span><span class="font-mono text-[9px] opacity-80">${fmtDate(r.passSentDate)}</span></button>
+              <button onclick="window.triggerEmailQueue('${r.code}','promemoria')" class="bg-amber-50 border border-amber-200 hover:bg-amber-100 text-amber-800 px-2 py-1.5 rounded-lg text-[9px] font-black flex justify-between items-center transition cursor-pointer"><span>2. P.Moria</span><span class="font-mono text-[9px] opacity-80">${fmtDate(r.promemoriaSentDate)}</span></button>
+              <button onclick="window.triggerEmailQueue('${r.code}','presenza')" class="bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-800 px-2 py-1.5 rounded-lg text-[9px] font-black flex justify-between items-center transition cursor-pointer"><span>3. Ingr.</span><span class="font-mono text-[9px] opacity-80">${fmtDate(r.presenzaSentDate)}</span></button>
+              <button onclick="window.triggerEmailQueue('${r.code}','pergamena')" class="bg-violet-50 border border-violet-200 hover:bg-violet-100 text-violet-800 px-2 py-1.5 rounded-lg text-[9px] font-black flex justify-between items-center transition cursor-pointer"><span>4. Uscita</span><span class="font-mono text-[9px] opacity-80">${fmtDate(r.pergamenaSentDate)}</span></button>
+            </div>
+          </td>
+          <td class="p-4 text-right align-top">
+            <div class="flex flex-col gap-2">
+              <button onclick="window.openEditRegModal('${r.code}')" class="p-2.5 text-sky-600 bg-sky-50 hover:bg-sky-100 rounded-lg transition border border-transparent hover:border-sky-200 flex items-center justify-center cursor-pointer"><i data-lucide="edit" class="w-4 h-4"></i></button>
+              <button onclick="window.triggerManualDelete('${r.code}')" class="p-2.5 text-rose-500 bg-rose-50 hover:bg-rose-100 rounded-lg transition border border-transparent hover:border-rose-200 flex items-center justify-center cursor-pointer"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+            </div>
+          </td>
+        </tr>
+      `}).join('');
+      try{ lucide.createIcons(); } catch(e){}
+    }
+    window.renderRegistrations = renderRegistrations;
+
+    async function updateDocField(code, field, value) {
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', code), { [field]: value });
+      if (field === 'status') {
+        const reg = state.registrations.find(x => x.code === code);
+        if (value === 'Ammesso') {
+           await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', code), { presenzaSentDate: 'IN_CODA_Q3' });
+           showToast("Presenza accodata con successo nel motore Email.", "info");
+        }
+        else if (value === 'Concluso') {
+           await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', code), { pergamenaSentDate: 'IN_CODA_Q3' });
+           showToast("Pergamena accodata con successo nel motore Email.", "info");
+        }
+        window.SmartEmailEngine.flushNow();
+      }
+    }
+    window.updateDocField = updateDocField;
+
+    async function triggerEmailQueue(code, type) {
+      const fieldMap = { 'pass':'passSentDate', 'promemoria':'promemoriaSentDate', 'presenza':'presenzaSentDate', 'pergamena':'pergamenaSentDate' };
+      const priority = (type === 'pass') ? 'Q1' : (type === 'promemoria' ? 'Q2' : 'Q3');
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', code), { [fieldMap[type]]: `IN_CODA_${priority}` });
+      showToast("Email accodata. Invio in elaborazione...", "info");
+      await window.SmartEmailEngine.flushNow();
+    }
+    window.triggerEmailQueue = triggerEmailQueue;
+
+    async function triggerManualDelete(code, silent = false) {
+      if(!silent && !confirm("Cancellare definitivamente questo iscritto dal database?")) return;
+      const existing = state.registrations.find(r => r.code === code);
+      try { const riga = document.getElementById(`riga-${code}`); if(riga && !silent) { riga.style.transition="opacity 0.3s"; riga.style.opacity="0"; } await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', code)); if (existing?.dateId) await promoteOpenDayWaitlist(existing.dateId); if(!silent) showToast("Eliminato. Lista d'attesa ricalcolata.", "success"); }
+      catch(e) { if(!silent) showToast("Errore durante l'eliminazione", "error"); }
+    }
+    window.triggerManualDelete = triggerManualDelete;
+
+    function exportToExcel() {
+      let csv = "Codice;Cognome;Nome;Email;Turno;Indirizzo;Stato;Inclusione\n";
+      state.registrations.forEach(r => csv += `${r.code};${r.cognome};${r.nome};${r.email};${r.dateStr};${r.studyPath};${r.status};${r.inclusione?'Si':'No'}\n`);
+      const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' })); link.download = "iscritti_primolevi.csv"; link.click();
+    }
+    window.exportToExcel = exportToExcel;
+
+    async function handleCreateTurno(e) {
+      e.preventDefault();
+      const newId = "date-" + Date.now();
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'dates', newId), {
+        id: newId, date: document.getElementById('newTurnoDate').value, timeSlot: document.getElementById('newTurnoTime').value.trim(),
+        aula: document.getElementById('newTurnoAula').value.trim(), maxSeats: parseInt(document.getElementById('newTurnoSeats').value || 100),
+        studyPath: canonicalOpenDayStudyPath(document.getElementById('newTurnoPath').value)
+      });
+      showToast("Turno aggiunto!", "success"); e.target.reset();
+    }
+    window.handleCreateTurno = handleCreateTurno;
+
+    function renderAdminDatesList() {
+      const tbody = document.getElementById('adminDatesTableBody');
+      if(!tbody) return;
+      const sortedDates = [...state.dates].sort((a, b) => new Date(a.date) - new Date(b.date) || a.timeSlot.localeCompare(b.timeSlot));
+      tbody.innerHTML = sortedDates.map(d => {
+        const maxSeats = Math.max(1, Number(d.maxSeats || 1));
+        const booked = activeSeatsFor(d.id);
+        const available = Math.max(0, maxSeats - booked);
+        const waitQueue = waitlistQueueFor(d.id);
+        const waitPeople = waitQueue.reduce((sum, r) => sum + seatsOf(r), 0);
+        const fitPlan = waitlistFitPlan(d.id, available);
+        const fitPeople = fitPlan.selected.reduce((sum, r) => sum + seatsOf(r), 0);
+        return `
+        <tr class="border-b hover:bg-slate-50 transition text-slate-700">
+          <td class="p-3 font-bold">${new Date(d.date).toLocaleDateString('it-IT')}</td>
+          <td class="p-3 font-mono font-bold">${d.timeSlot}</td>
+          <td class="p-3 text-indigo-700 font-bold text-xs">${d.studyPath}</td>
+          <td class="p-3 font-semibold">${d.aula}</td>
+          <td class="p-3 text-center font-bold text-slate-900">
+            <div>${booked} / ${maxSeats} occupati</div>
+            <div class="mt-1 text-[9px] font-black ${available ? 'text-emerald-700' : 'text-rose-700'}">Liberi: ${available}</div>
+            ${waitQueue.length ? `<div class="mt-1 text-[9px] font-black text-violet-700">Attesa: ${waitQueue.length} richieste / ${waitPeople} persone</div><div class="mt-1 text-[9px] font-black ${fitPlan.selected.length ? 'text-sky-700' : 'text-amber-700'}">${fitPlan.selected.length ? `Compatibili ora: ${fitPlan.selected.length} richieste / ${fitPeople} persone` : (available ? `Nessun gruppo in coda entra nei ${available} posti liberi` : 'Scorrimento fermo: turno completo')}</div>` : ``}
+          </td>
+          <td class="p-3 text-right">
+            <div class="flex justify-end gap-2">
+              <button onclick="window.openEditDateModal('${d.id}')" class="p-2.5 text-sky-600 bg-sky-50 hover:bg-sky-100 border border-transparent hover:border-sky-200 cursor-pointer"><i data-lucide="edit" class="w-4 h-4"></i></button>
+              <button onclick="window.triggerDeleteTurno('${d.id}')" class="p-2.5 text-rose-500 bg-rose-50 hover:bg-rose-100 border border-transparent hover:border-rose-200 cursor-pointer"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+            </div>
+          </td>
+        </tr>
+      `}).join('');
+      lucide.createIcons();
+    }
+    window.renderAdminDatesList = renderAdminDatesList;
+
+    async function triggerDeleteTurno(id) {
+      if(!confirm("Rimuovere questo turno dal calendario?")) return;
+      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'dates', id));
+      showToast("Turno rimosso.", "success");
+    }
+    window.triggerDeleteTurno = triggerDeleteTurno;
+
+    async function savePromemoriaSettings() {
+      const days = parseInt(document.getElementById('settingsPromemoriaDays').value || 7);
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'promemoria'), { days });
+      window.promemoriaDays = days;
+      await window.reconcileScheduledOpenDayEmails();
+      await window.SmartEmailEngine.flushNow();
+      showToast("Impostazioni salvate e coda promemoria verificata!", "success");
+    }
+    window.savePromemoriaSettings = savePromemoriaSettings;
+
+    async function checkAndSendPromemoria() {
+      await window.reconcileScheduledOpenDayEmails();
+      await window.SmartEmailEngine.flushNow();
+    }
+    window.checkAndSendPromemoria = checkAndSendPromemoria;
+
+    async function triggerResetDatabase() {
+      if (!confirm("ATTENZIONE: Svuotare archivio registrazioni?") || prompt("Scrivi RESET per confermare") !== "RESET") return;
+      try {
+        const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'registrations'));
+        const promises = [];
+        snap.forEach(d => promises.push(deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', d.id))));
+        await Promise.all(promises);
+        showToast("Archivio iscritti svuotato", "success");
+      } catch(e) { showToast("Errore", "error"); }
+    }
+    window.triggerResetDatabase = triggerResetDatabase;
+
+    async function triggerResetDates() {
+      if (!confirm("ATTENZIONE: Eliminare tutti i turni dal calendario?") || prompt("Scrivi RESET per confermare") !== "RESET") return;
+      try {
+        const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'dates'));
+        const promises = [];
+        snap.forEach(d => promises.push(deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'dates', d.id))));
+        await Promise.all(promises);
+        showToast("Calendario turni svuotato", "success");
+      } catch(e) { showToast("Errore", "error"); }
+    }
+    window.triggerResetDates = triggerResetDates;
+
+    function renderConnectedDevices() {
+      const tbody = document.getElementById('connectedDevicesTableBody');
+      if(!tbody) return;
+      if(state.devices.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="3" class="p-4 text-center text-slate-400 font-semibold italic">Nessun dispositivo rilevato ultimamente.</td></tr>`;
+      } else {
+        const activeDevices = state.devices.filter(d => (Date.now() - d.lastSeen) < 3600000);
+        if(activeDevices.length === 0) { tbody.innerHTML = `<tr><td colspan="3" class="p-4 text-center text-slate-400 font-semibold italic">Nessun dispositivo attualmente online.</td></tr>`; return; }
+        
+        tbody.innerHTML = activeDevices.map(d => `
+          <tr class="border-b">
+            <td class="p-3 font-mono text-indigo-700 font-bold">${d.id}</td>
+            <td class="p-3"><span class="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full text-[9px] font-black">ONLINE</span></td>
+            <td class="p-3 text-center font-black text-slate-800">${d.scans || 0}</td>
+          </tr>
+        `).join('');
+      }
+    }
+    window.renderConnectedDevices = renderConnectedDevices;
+
+    let compStream = null, compActive = false, lastScannedCode = null;
+    function generateCompanionScannerQR() { new QRious({ element: document.getElementById('companionScannerQrCanvas'), value: window.location.origin + window.location.pathname + "?scanner=true", size: 150 }); }
+    window.generateCompanionScannerQR = generateCompanionScannerQR;
+
+    async function openCompanionScannerMode() {
+      document.getElementById('wrapperMainSite').classList.add('hidden'); document.getElementById('wrapperCompanionScanner').classList.remove('hidden');
+      try {
+        const myDeviceId = getDeviceId();
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'scanners', myDeviceId), { id: myDeviceId, lastSeen: Date.now(), scans: 0 }, { merge: true });
+        
+        compStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        document.getElementById('companionVideo').srcObject = compStream; document.getElementById('companionVideo').play();
+        compActive = true; requestAnimationFrame(tickComp);
+      } catch(e) {}
+    }
+    window.openCompanionScannerMode = openCompanionScannerMode;
+
+    function exitCompanionScanner() { compActive = false; compStream?.getTracks().forEach(t=>t.stop()); window.location.href = window.location.origin + window.location.pathname; }
+    window.exitCompanionScanner = exitCompanionScanner;
+
+    function tickComp() {
+      if(!compActive) return;
+      const video = document.getElementById('companionVideo'), canvas = document.getElementById('companionCanvas'), ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if(video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const code = jsQR(ctx.getImageData(0, 0, canvas.width, canvas.height).data, canvas.width, canvas.height, { inversionAttempts: "dontInvert" });
+        if (code && code.data) {
+          const qrData = code.data.trim().toUpperCase();
+          if (qrData !== lastScannedCode) {
+            lastScannedCode = qrData;
+            const reg = state.registrations.find(r => r.code === qrData);
+            if (reg && reg.type !== WAITLIST_TYPE && reg.status !== 'Ammesso' && reg.status !== 'Concluso') {
+              
+              const myDeviceId = getDeviceId();
+              getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'scanners', myDeviceId)).then(snap => {
+                let currentScans = snap.exists() ? (snap.data().scans || 0) : 0;
+                updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'scanners', myDeviceId), { scans: currentScans + 1, lastSeen: Date.now() });
+              });
+
+              document.getElementById('scannerScannedName').innerText = `${reg.cognome} ${reg.nome}`;
+              document.getElementById('scannerScannedPath').innerText = reg.studyPath;
+              document.getElementById('scannerSuccessOverlay').classList.remove('hidden');
+              
+              updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', qrData), { status: 'Ammesso', presenzaSentDate: 'IN_CODA_Q3' })
+                .then(() => window.SmartEmailEngine.flushNow())
+                .catch(e => console.error("Accodamento attestato ingresso non riuscito", e));
+              
+              const targetDateObj = state.dates.find(d => d.id === reg.dateId);
+              let delayMs = 5 * 60 * 1000; 
+              if (targetDateObj) {
+                try {
+                  let endTimeStr = targetDateObj.timeSlot;
+                  if (endTimeStr.includes('-')) {
+                    endTimeStr = endTimeStr.split('-')[1].trim();
+                  }
+                  const timeParts = endTimeStr.split(':');
+                  const endDateTime = new Date(targetDateObj.date);
+                  endDateTime.setHours(parseInt(timeParts[0], 10), parseInt(timeParts[1], 10) + 5, 0, 0); 
+                  
+                  delayMs = endDateTime.getTime() - Date.now();
+                  if (delayMs < 0) delayMs = 15000; 
+                } catch(e) { console.error("Errore parse data", e); }
+              }
+
+              setTimeout(async () => {
+                 await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', qrData), { status: 'Concluso', pergamenaSentDate: 'IN_CODA_Q3' });
+                 window.SmartEmailEngine.flushNow();
+              }, delayMs);
+
+              setTimeout(() => { document.getElementById('scannerSuccessOverlay').classList.add('hidden'); lastScannedCode = null; window.SmartEmailEngine.flushNow(); }, 4000);
+            } else {
+               setTimeout(() => lastScannedCode = null, 2000); 
+            }
+          }
+        }
+      }
+      if(compActive) requestAnimationFrame(tickComp);
+    }
+
+    function initBubbles() {
+      const c = document.getElementById('bubbleContainer');
+      if(!c) return;
+      c.innerHTML = '';
+      for (let i = 0; i < 20; i++) {
+        const b = document.createElement('div'); b.className = 'bubble';
+        const s = Math.random() * 80 + 70; b.style.width = `${s}px`; b.style.height = `${s}px`;
+        b.style.left = `${Math.random() * 90}vw`; b.style.top = `${Math.random() * 90}vh`;
+        b.style.setProperty('--moveX', `${Math.random() * 100 - 50}px`); b.style.setProperty('--moveY', `${Math.random() * 100 - 50}px`);
+        b.style.setProperty('--speed', `${Math.random() * 10 + 10}s`);
+        const img = document.createElement('img'); img.src = 'levi.png'; img.className = 'bubble-logo flex-shrink-0';
+        b.appendChild(img); c.appendChild(b);
+      }
+    }
+
+    function initApp() {
+      startApp();
+      initBubbles();
+      try { lucide.createIcons(); } catch(e) {}
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initApp);
+    } else {
+      initApp();
+    }
+  </script>
+</body>
+</html>
