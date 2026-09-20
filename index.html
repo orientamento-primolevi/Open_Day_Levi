@@ -1912,8 +1912,7 @@ Preferenza: ${openDayLiceoPreferenceLabel(regData)}` : regData.studyPath; docume
 
     function handleAdminLogin(e) { 
       e.preventDefault(); 
-      if (document.getElementById('adminPasswordInput').value === 'admin') { 
-        state.isAdminAuthed = true; 
+    if (document.getElementById('adminPasswordInput').value === 'openday2026_levi') {        state.isAdminAuthed = true; 
         window.navigateTo('admin'); 
         window.generateCompanionScannerQR(); 
       } else {
