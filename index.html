@@ -2291,7 +2291,11 @@ Preferenza: ${openDayLiceoPreferenceLabel(regData)}` : regData.studyPath; docume
         DUPLICATE_IN_TARGET: 'Una prenotazione dello stesso studente e gia presente il 04/11.',
         LOCKED: 'Un turno e in aggiornamento. Riprova.',
         STALE_SOURCE: 'Le iscrizioni sono cambiate durante la verifica: nessun trasferimento.',
-        NO_MIGRATED_RECORDS: 'Non risultano sei posti trasferiti da questa procedura.'
+        NO_MIGRATED_RECORDS: 'Non risultano sei posti trasferiti da questa procedura.',
+        RESCHEDULE_MIXED_TARGET: 'Le prenotazioni trasferite non appartengono tutte allo stesso turno di destinazione.',
+        RESCHEDULE_TARGET_NOT_FOUND: 'Il turno della nuova prenotazione non e presente nel calendario; nessuna email accodata.',
+        RESCHEDULE_TARGET_INVALID: 'Il turno associato alle iscrizioni non corrisponde al Liceo del 04/11 ore 09:15–10:45.',
+        RESCHEDULE_ALREADY_PENDING: 'Le conferme sono gia in coda o in elaborazione: controlla il motore email prima di reinviarle.'
       };
       if (String(e && e.message || '').startsWith('SLOT_NOT_IDENTIFIED|')) return 'Turno non identificato dagli orari: ' + e.message.split('|')[1] + ' Nessun dato modificato.';
       return labels[e && e.message] || 'Operazione non completata: ' + (e && e.message || 'errore sconosciuto');
@@ -2350,26 +2354,54 @@ Preferenza: ${openDayLiceoPreferenceLabel(regData)}` : regData.studyPath; docume
     window.moveLsSixSeatsToNovemberFourth = moveLsSixSeatsToNovemberFourth;
 
     async function queueLsRescheduledConfirmations() {
-      if (!state.isAdminAuthed || !state.user) return showToast('Accesso Area Docenti necessario.', 'error');
+      if (!state.isAdminAuthed || !state.user)
+        return showToast('Accesso Area Docenti necessario.', 'error');
       try {
-        const fresh = await lsLoadFresh({ sourceRequired: false });
-        const moved = fresh.registrations.filter(r =>
-          r.rescheduleBatch === LS_MOVE_TAG && r.dateId === fresh.target.id && isSeatActiveRegistration(r));
-        const seats = moved.reduce((sum,r) => sum + seatsOf(r), 0);
-        if (fresh.source || !moved.length || seats !== 6 || moved.some(r=>!r.code || r.id!==r.code))
+        // LE CONFERME SONO ASSOCIATE AI RECORD GIA SPOSTATI, non alla ricerca
+        // per data/orario dei turni originali (che potrebbero non esistere piu).
+        const regSnap = await getDocs(collection(db,'artifacts',appId,'public','data','registrations'));
+        const registrations = regSnap.docs.map(s => ({...s.data(), id:s.id}));
+        const moved = registrations.filter(r =>
+          r.rescheduleBatch === LS_MOVE_TAG && isSeatActiveRegistration(r));
+        const seats = moved.reduce((sum,r) => sum + seatsOf(r),0);
+        if (!moved.length || seats !== 6 || moved.some(r=>!r.code || r.id !== r.code))
           throw Error('NO_MIGRATED_RECORDS');
-        if (!confirm('Accodare ' + moved.length + ' conferme con PDF e orario aggiornati? Verifica la quota giornaliera; la consegna va controllata sul servizio Google Apps Script.')) return;
+        const destinationIds = [...new Set(moved.map(r => r.dateId).filter(Boolean))];
+        if (destinationIds.length !== 1) throw Error('RESCHEDULE_MIXED_TARGET');
+        const destinationId = destinationIds[0];
+        // Il solo documento del turno NUOVO e la fonte di verita per data e orario.
+        // Non si controllano la data cancellata, gli altri indirizzi o la capienza.
+        const slotSnap = await getDoc(doc(db,'artifacts',appId,'public','data','dates',destinationId));
+        if (!slotSnap.exists()) throw Error('RESCHEDULE_TARGET_NOT_FOUND');
+        const slot = {id:slotSnap.id,...slotSnap.data()};
+        if (lsDay(slot.date) !== '2026-11-04' ||
+            !lsMatchClock(slot,'09:15','10:45') ||
+            !isOpenDayLiceoPath(slot.studyPath))
+          throw Error('RESCHEDULE_TARGET_INVALID');
+        const freshDay = lsDay(slot.date);
+        const [year,month,day] = freshDay.split('-');
+        const freshDateStr = day+'/'+month+'/'+year+' • '+slot.timeSlot;
+        if (moved.some(r => r.passSentDate === 'ELABORAZIONE' ||
+            String(r.passSentDate || '').includes('IN_CODA')))
+          throw Error('RESCHEDULE_ALREADY_PENDING');
+        if (!confirm('Reinviare ' + moved.length + ' email relative a ' + seats +
+          ' posti del Liceo? Data: ' + freshDateStr +
+          '. I codici prenotazione rimangono invariati; ogni email conterra il pass PDF aggiornato.')) return;
         const batch = writeBatch(db), queuedAt = Date.now();
-        for (const r of moved)
-          batch.update(doc(db,'artifacts',appId,'public','data','registrations',r.id), {
-            passSentDate: 'IN_CODA_Q1', rescheduleConfirmationQueuedAt: queuedAt
+        for (const r of moved) {
+          batch.update(doc(db,'artifacts',appId,'public','data','registrations',r.id),{
+            dateId:destinationId, dateStr:freshDateStr,
+            studyPath:canonicalOpenDayStudyPath(slot.studyPath),
+            passSentDate:'IN_CODA_Q1',rescheduleConfirmationQueuedAt:queuedAt
           });
+        }
         await batch.commit();
-        showToast('Conferme aggiornate accodate. Verifica la consegna presso Google.', 'info');
+        showToast('Accodate '+ moved.length +' conferme per '+freshDateStr+'. Controlla la coda e la consegna su Google.', 'info');
+        // L'invio e asincrono tramite la coda; non dichiarare consegna dal fetch no-cors.
         await window.SmartEmailEngine.flushNow();
       } catch(e) {
-        console.error('LS resend', e);
-        showToast(lsTransferError(e), 'error');
+        console.error('LS resend',e);
+        showToast(lsTransferError(e),'error');
       }
     }
     window.queueLsRescheduledConfirmations = queueLsRescheduledConfirmations;
