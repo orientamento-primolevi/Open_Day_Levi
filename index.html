@@ -526,8 +526,8 @@
 
             <div class="space-y-3 p-4 rounded-xl border border-indigo-200 bg-indigo-50">
               <h5 class="text-xs font-black text-indigo-900 uppercase">Spostamento straordinario Liceo — sei posti</h5>
-              <p class="text-xs text-slate-700">14/11/2026 ore 09:00–11:00 → 04/11/2026 ore 09:15–10:45. Controllo del database prima del trasferimento; nessun codice o nominativo viene cancellato. Le email non partono durante lo spostamento.</p>
-              <button type="button" onclick="window.moveLsSixSeatsToNovemberFourth()" class="w-full p-3 rounded-lg bg-indigo-700 text-white text-xs font-black">Verifica e trasferisci i sei posti</button>
+              <p class="text-xs text-slate-700">14/11/2026 ore 09:00–11:00 → 04/11/2026 ore 09:15–10:45. Controllo del database prima del trasferimento: tutte le iscrizioni conservano i codici originali. Il solo turno del 14/11 ore 09:00–11:00 viene eliminato nello stesso salvataggio. Le email non partono durante lo spostamento.</p>
+              <button type="button" onclick="window.moveLsSixSeatsToNovemberFourth()" class="w-full p-3 rounded-lg bg-indigo-700 text-white text-xs font-black">Trasferisci i sei posti ed elimina il vecchio turno</button>
               <button type="button" onclick="window.queueLsRescheduledConfirmations()" class="w-full p-3 rounded-lg bg-emerald-700 text-white text-xs font-black">Reinvia le conferme con il nuovo pass PDF</button>
               <p class="text-[10px] text-slate-600">Dopo il trasferimento usa il secondo pulsante; controlla la consegna nel servizio email Google. Il browser non riceve la conferma finale di recapito.</p>
             </div>
@@ -2197,7 +2197,7 @@ Preferenza: ${openDayLiceoPreferenceLabel(regData)}` : regData.studyPath; docume
       return slot.date === day && times[0] === from && times[1] === to &&
         isOpenDayLiceoPath(slot.studyPath);
     }
-    async function lsLoadFresh() {
+    async function lsLoadFresh({ sourceRequired = true } = {}) {
       const root = ['artifacts', appId, 'public', 'data'];
       const results = await Promise.all([
         getDocs(collection(db, ...root, 'dates')),
@@ -2207,7 +2207,8 @@ Preferenza: ${openDayLiceoPreferenceLabel(regData)}` : regData.studyPath; docume
       const registrations = results[1].docs.map(x => ({...x.data(), id: x.id}));
       const sources = dates.filter(d => lsSlotMatches(d, '2026-11-14', '09:00', '11:00'));
       const targets = dates.filter(d => lsSlotMatches(d, '2026-11-04', '09:15', '10:45'));
-      if (sources.length !== 1 || targets.length !== 1 || sources[0].id === targets[0].id)
+      if (targets.length !== 1 || (sourceRequired && sources.length !== 1) || sources.length > 1 ||
+          (sources.length && sources[0].id === targets[0].id))
         throw Error('DATE_NOT_UNIQUE');
       return {source: sources[0], target: targets[0], registrations};
     }
@@ -2219,6 +2220,8 @@ Preferenza: ${openDayLiceoPreferenceLabel(regData)}` : regData.studyPath; docume
       if (!moving.length || seats !== 6) throw Error('SOURCE_NOT_SIX_SEATS');
       if (moving.some(r => !r.code || r.id !== r.code || r.rescheduleBatch))
         throw Error('SOURCE_UNEXPECTED_RECORD');
+      if (registrations.some(r => r.dateId === source.id && !moving.some(m => m.id === r.id)))
+        throw Error('SOURCE_OTHER_RECORDS');
       if (waitlistQueueFor(target.id, registrations).length) throw Error('TARGET_WAITLIST');
       if (!Number.isFinite(Number(target.maxSeats)) ||
           activeSeatsFor(target.id, registrations) + seats > Number(target.maxSeats))
@@ -2240,6 +2243,7 @@ Preferenza: ${openDayLiceoPreferenceLabel(regData)}` : regData.studyPath; docume
         DATE_NOT_UNIQUE: 'Turno del 14/11 o del 04/11 non trovato in modo univoco nel database: nessun dato cambiato.',
         SOURCE_NOT_SIX_SEATS: 'I posti attivi del 14/11 non sono esattamente 6: verifica i dati prima di procedere.',
         SOURCE_UNEXPECTED_RECORD: 'Una prenotazione non ha un codice valido o risulta gia trasferita.',
+        SOURCE_OTHER_RECORDS: 'Il turno del 14/11 contiene ulteriori iscrizioni, riserve o registrazioni: nessuna eliminazione per evitare perdite di dati.',
         TARGET_WAITLIST: 'Il turno del 04/11 ha una lista d’attesa: trasferimento bloccato per non scavalcarla.',
         TARGET_FULL: 'Capienza insufficiente o non valida nella destinazione.',
         PATH_MISMATCH: 'I due turni appartengono a indirizzi differenti.',
@@ -2261,7 +2265,7 @@ Preferenza: ${openDayLiceoPreferenceLabel(regData)}` : regData.studyPath; docume
           'SPOSTAMENTO OPEN DAY\n' + first.moving.length + ' prenotazioni / ' + first.seats +
           ' posti: 14/11/2026 09:00–11:00 → 04/11/2026 09:15–10:45.\n' +
           'Destinazione: ' + current + ' + ' + first.seats + ' / ' + preview.target.maxSeats +
-          '.\nI codici e i dati dei partecipanti restano invariati. Non vengono inviate email ora. Confermi?'
+          '.\nLe iscrizioni manterranno codici e dati. Il SOLO turno 14/11 ore 09:00–11:00 sara eliminato nello stesso salvataggio. Non vengono inviate email ora. Confermi?'
         )) return;
         for (const id of [preview.source.id, preview.target.id].sort()) {
           if (!(await acquireOpenDayWaitlistLock(id))) throw Error('LOCKED');
@@ -2286,8 +2290,11 @@ Preferenza: ${openDayLiceoPreferenceLabel(regData)}` : regData.studyPath; docume
             rescheduleConfirmationQueuedAt: null
           });
         }
-        await batch.commit(); // Tutti i record insieme o nessuno: nessuna cancellazione.
-        showToast('Trasferite ' + checked.moving.length + ' prenotazioni / ' + checked.seats + ' posti. Ora puoi accodare le email aggiornate.', 'success');
+        // Spostamento e cancellazione del SOLO turno originale nello stesso batch atomico.
+        // Un errore Firestore impedisce sia il trasferimento sia l'eliminazione.
+        batch.delete(doc(db,'artifacts',appId,'public','data','dates',fresh.source.id));
+        await batch.commit();
+        showToast('Trasferite ' + checked.moving.length + ' prenotazioni / ' + checked.seats + ' posti; eliminato il solo turno del 14/11 ore 09:00. Ora puoi accodare le email aggiornate.', 'success');
       } catch(e) {
         console.error('LS reschedule', e);
         showToast(lsTransferError(e), 'error');
@@ -2300,11 +2307,11 @@ Preferenza: ${openDayLiceoPreferenceLabel(regData)}` : regData.studyPath; docume
     async function queueLsRescheduledConfirmations() {
       if (!state.isAdminAuthed || !state.user) return showToast('Accesso Area Docenti necessario.', 'error');
       try {
-        const fresh = await lsLoadFresh();
+        const fresh = await lsLoadFresh({ sourceRequired: false });
         const moved = fresh.registrations.filter(r =>
           r.rescheduleBatch === LS_MOVE_TAG && r.dateId === fresh.target.id && isSeatActiveRegistration(r));
         const seats = moved.reduce((sum,r) => sum + seatsOf(r), 0);
-        if (!moved.length || seats !== 6 || moved.some(r=>!r.code || r.id!==r.code))
+        if (fresh.source || !moved.length || seats !== 6 || moved.some(r=>!r.code || r.id!==r.code))
           throw Error('NO_MIGRATED_RECORDS');
         if (!confirm('Accodare ' + moved.length + ' conferme con PDF e orario aggiornati? Verifica la quota giornaliera; la consegna va controllata sul servizio Google Apps Script.')) return;
         const batch = writeBatch(db), queuedAt = Date.now();
