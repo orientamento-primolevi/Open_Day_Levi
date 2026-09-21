@@ -2191,11 +2191,40 @@ Preferenza: ${openDayLiceoPreferenceLabel(regData)}` : regData.studyPath; docume
     // OPEN_DAY_LS_RESCHEDULE_2026_V1: trasferimento esplicito in Area Docenti.
     // Nessun dato viene modificato alla visita della pagina.
     const LS_MOVE_TAG = 'ls-2026-11-14-0900-to-2026-11-04-0915';
-    function lsSlotMatches(slot, day, from, to) {
-      const times = (String(slot.timeSlot || '').match(/\d{1,2}:\d{2}/g) || [])
-        .map(x => x.padStart(5, '0'));
-      return slot.date === day && times[0] === from && times[1] === to &&
-        isOpenDayLiceoPath(slot.studyPath);
+    // Il turno e identificato prima di tutto dall'orario (anche "09:15,10:45").
+    // Data, sede e capienza servono a distinguere eventuali sessioni con lo stesso orario.
+    function lsClock(slot) {
+      return (String(slot.timeSlot || '').match(/\d{1,2}[:.]\d{2}/g) || [])
+        .map(x => x.replace('.', ':').padStart(5,'0'));
+    }
+    function lsDay(value) {
+      const raw = String(value || '').trim();
+      let match = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+      if (match) return [match[1],match[2].padStart(2,'0'),match[3].padStart(2,'0')].join('-');
+      match = raw.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})/);
+      if (match) return [match[3],match[2].padStart(2,'0'),match[1].padStart(2,'0')].join('-');
+      return '';
+    }
+    function lsMatchClock(slot, from, to) {
+      const clock = lsClock(slot);
+      return isOpenDayLiceoPath(slot.studyPath) && clock[0] === from &&
+        (!clock[1] || clock[1] === to);
+    }
+    function lsUniqueSlot(candidates, preferredDay, preferredCapacity, registrations, preferredSeats) {
+      if (!candidates.length) return null;
+      let matches = candidates;
+      const onDay = matches.filter(d => lsDay(d.date) === preferredDay);
+      if (onDay.length) matches = onDay;
+      if (matches.length !== 1) {
+        const withCapacity = matches.filter(d => Number(d.maxSeats) === preferredCapacity);
+        if (withCapacity.length) matches = withCapacity;
+      }
+      if (matches.length !== 1 && Number.isFinite(preferredSeats)) {
+        const withSeats = matches.filter(d => activeSeatsFor(d.id, registrations) === preferredSeats);
+        if (withSeats.length) matches = withSeats;
+      }
+      // Non selezionare mai arbitrariamente uno dei turni rimasti ambigui.
+      return matches.length === 1 ? matches[0] : null;
     }
     async function lsLoadFresh({ sourceRequired = true } = {}) {
       const root = ['artifacts', appId, 'public', 'data'];
@@ -2205,12 +2234,21 @@ Preferenza: ${openDayLiceoPreferenceLabel(regData)}` : regData.studyPath; docume
       ]);
       const dates = results[0].docs.map(x => ({...x.data(), id: x.id}));
       const registrations = results[1].docs.map(x => ({...x.data(), id: x.id}));
-      const sources = dates.filter(d => lsSlotMatches(d, '2026-11-14', '09:00', '11:00'));
-      const targets = dates.filter(d => lsSlotMatches(d, '2026-11-04', '09:15', '10:45'));
-      if (targets.length !== 1 || (sourceRequired && sources.length !== 1) || sources.length > 1 ||
-          (sources.length && sources[0].id === targets[0].id))
-        throw Error('DATE_NOT_UNIQUE');
-      return {source: sources[0], target: targets[0], registrations};
+      const sourcesOnDate = dates.filter(d => lsMatchClock(d, '09:00', '11:00') &&
+        lsDay(d.date) === '2026-11-14');
+      const sourceCandidates = sourcesOnDate.length || !sourceRequired ? sourcesOnDate :
+        dates.filter(d => lsMatchClock(d, '09:00', '11:00') &&
+          Number(d.maxSeats) === 120 && activeSeatsFor(d.id, registrations) === 6);
+      const targetCandidates = dates.filter(d => lsMatchClock(d, '09:15', '10:45') &&
+        Number(d.maxSeats) === 300);
+      const source = lsUniqueSlot(sourceCandidates, '2026-11-14', 120, registrations, 6);
+      const target = lsUniqueSlot(targetCandidates, '2026-11-04', 300, registrations, 27);
+      if (!target || (sourceRequired && !source) || (source && source.id === target.id)) {
+        const hint = '09:00=' + sourceCandidates.length + ', 09:15=' + targetCandidates.length +
+          ' (300 posti); verificare orari, indirizzo e capienze del calendario.';
+        throw Error('SLOT_NOT_IDENTIFIED|' + hint);
+      }
+      return {source, target, registrations};
     }
     function lsCheckTransfer(data) {
       const {source, target, registrations} = data;
@@ -2240,18 +2278,20 @@ Preferenza: ${openDayLiceoPreferenceLabel(regData)}` : regData.studyPath; docume
     }
     function lsTransferError(e) {
       const labels = {
-        DATE_NOT_UNIQUE: 'Turno del 14/11 o del 04/11 non trovato in modo univoco nel database: nessun dato cambiato.',
+        DATE_NOT_UNIQUE: 'Non e stato possibile distinguere in sicurezza i turni: nessun dato modificato.',
         SOURCE_NOT_SIX_SEATS: 'I posti attivi del 14/11 non sono esattamente 6: verifica i dati prima di procedere.',
         SOURCE_UNEXPECTED_RECORD: 'Una prenotazione non ha un codice valido o risulta gia trasferita.',
         SOURCE_OTHER_RECORDS: 'Il turno del 14/11 contiene ulteriori iscrizioni, riserve o registrazioni: nessuna eliminazione per evitare perdite di dati.',
         TARGET_WAITLIST: 'Il turno del 04/11 ha una lista d’attesa: trasferimento bloccato per non scavalcarla.',
         TARGET_FULL: 'Capienza insufficiente o non valida nella destinazione.',
+        TARGET_DATE_INVALID: 'Formato data del turno di destinazione non valido: nessun dato modificato.',
         PATH_MISMATCH: 'I due turni appartengono a indirizzi differenti.',
         DUPLICATE_IN_TARGET: 'Una prenotazione dello stesso studente e gia presente il 04/11.',
         LOCKED: 'Un turno e in aggiornamento. Riprova.',
         STALE_SOURCE: 'Le iscrizioni sono cambiate durante la verifica: nessun trasferimento.',
         NO_MIGRATED_RECORDS: 'Non risultano sei posti trasferiti da questa procedura.'
       };
+      if (String(e && e.message || '').startsWith('SLOT_NOT_IDENTIFIED|')) return 'Turno non identificato dagli orari: ' + e.message.split('|')[1] + ' Nessun dato modificato.';
       return labels[e && e.message] || 'Operazione non completata: ' + (e && e.message || 'errore sconosciuto');
     }
     async function moveLsSixSeatsToNovemberFourth() {
@@ -2263,7 +2303,8 @@ Preferenza: ${openDayLiceoPreferenceLabel(regData)}` : regData.studyPath; docume
         const current = activeSeatsFor(preview.target.id, preview.registrations);
         if (!confirm(
           'SPOSTAMENTO OPEN DAY\n' + first.moving.length + ' prenotazioni / ' + first.seats +
-          ' posti: 14/11/2026 09:00–11:00 → 04/11/2026 09:15–10:45.\n' +
+          ' posti: ' + (lsDay(preview.source.date) || preview.source.date) + ' ore ' + preview.source.timeSlot +
+          ' → ' + (lsDay(preview.target.date) || preview.target.date) + ' ore ' + preview.target.timeSlot + '.\n' +
           'Destinazione: ' + current + ' + ' + first.seats + ' / ' + preview.target.maxSeats +
           '.\nLe iscrizioni manterranno codici e dati. Il SOLO turno 14/11 ore 09:00–11:00 sara eliminato nello stesso salvataggio. Non vengono inviate email ora. Confermi?'
         )) return;
@@ -2277,8 +2318,10 @@ Preferenza: ${openDayLiceoPreferenceLabel(regData)}` : regData.studyPath; docume
           checked.moving.map(r=>r.id + ':' + seatsOf(r)).sort().join('|') !==
           first.moving.map(r=>r.id + ':' + seatsOf(r)).sort().join('|'))
           throw Error('STALE_SOURCE');
-        const dateStr = new Date(fresh.target.date + 'T12:00:00').toLocaleDateString('it-IT') +
-          ' • ' + fresh.target.timeSlot;
+        const actualDay = lsDay(fresh.target.date);
+        if (!actualDay) throw Error('TARGET_DATE_INVALID');
+        const [year, month, day] = actualDay.split('-');
+        const dateStr = day + '/' + month + '/' + year + ' • ' + fresh.target.timeSlot;
         const batch = writeBatch(db), movedAt = Date.now();
         for (const r of checked.moving) {
           batch.update(doc(db,'artifacts',appId,'public','data','registrations',r.id), {
