@@ -524,6 +524,13 @@
               <span class="text-[10px] text-slate-400 font-bold block">Specifica quanti giorni prima del turno d'aula inviare la mail promemoria automatica.</span>
             </div>
 
+            <div class="space-y-3 p-4 rounded-xl border border-indigo-200 bg-indigo-50">
+              <h5 class="text-xs font-black text-indigo-900 uppercase">Spostamento straordinario Liceo — sei posti</h5>
+              <p class="text-xs text-slate-700">14/11/2026 ore 09:00–11:00 → 04/11/2026 ore 09:15–10:45. Controllo del database prima del trasferimento; nessun codice o nominativo viene cancellato. Le email non partono durante lo spostamento.</p>
+              <button type="button" onclick="window.moveLsSixSeatsToNovemberFourth()" class="w-full p-3 rounded-lg bg-indigo-700 text-white text-xs font-black">Verifica e trasferisci i sei posti</button>
+              <button type="button" onclick="window.queueLsRescheduledConfirmations()" class="w-full p-3 rounded-lg bg-emerald-700 text-white text-xs font-black">Reinvia le conferme con il nuovo pass PDF</button>
+              <p class="text-[10px] text-slate-600">Dopo il trasferimento usa il secondo pulsante; controlla la consegna nel servizio email Google. Il browser non riceve la conferma finale di recapito.</p>
+            </div>
             <div class="space-y-2 pt-2">
               <h5 class="text-xs font-bold text-rose-800 uppercase">Gestione Database</h5>
               <div class="flex flex-col sm:flex-row gap-3 mt-3">
@@ -757,7 +764,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, collection, doc, setDoc, deleteDoc, updateDoc, onSnapshot, getDocs, getDoc, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getFirestore, collection, doc, setDoc, deleteDoc, updateDoc, onSnapshot, getDocs, getDoc, runTransaction, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDAQB-W-QTV1thVoCCifbdTFbpaYmAM4eQ",
@@ -1627,23 +1634,12 @@
       if (window.location.search.includes('scanner=true')) window.openCompanionScannerMode();
     }
 
-    const defaultDates = [
-      { id: "date-1", date: "2026-11-14", timeSlot: "09:00 - 11:00", aula: "Aula Magna Sede", maxSeats: 120, studyPath: "LS - Liceo Scientifico opzione Scienze Applicate e Liceo Scienze Applicate - Curvatura Economica" },
-      { id: "date-2", date: "2026-11-14", timeSlot: "11:30 - 13:30", aula: "Aula Magna Sede", maxSeats: 120, studyPath: "LS - Liceo Scientifico opzione Scienze Applicate e Liceo Scienze Applicate - Curvatura Economica" },
-      { id: "date-3", date: "2026-11-28", timeSlot: "09:00 - 11:00", aula: "Aula Magna Sede", maxSeats: 120, studyPath: "LS - Liceo Scientifico opzione Scienze Applicate e Liceo Scienze Applicate - Curvatura Economica" },
-      { id: "date-4", date: "2026-11-28", timeSlot: "11:30 - 13:30", aula: "Aula Magna Sede", maxSeats: 120, studyPath: "LS - Liceo Scientifico opzione Scienze Applicate e Liceo Scienze Applicate - Curvatura Economica" },
-      { id: "date-5", date: "2026-12-14", timeSlot: "09:00 - 11:00", aula: "Laboratori Sede", maxSeats: 100, studyPath: "LOG - Logistica e Trasporti" },
-      { id: "date-6", date: "2026-12-14", timeSlot: "11:30 - 13:30", aula: "Laboratori Sede", maxSeats: 100, studyPath: "CAT - Costruzioni, Ambiente e Territorio" }
-    ];
-
     function setupRealtimeListeners() {
       onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'dates'), s => {
         state.dates = []; 
-        if(s.empty) {
-          defaultDates.forEach(d => setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'dates', d.id), d));
-        } else {
-          s.forEach(d => { const raw = {id: d.id, ...d.data()}; state.dates.push({...raw, studyPath: canonicalOpenDayStudyPath(raw.studyPath)}); }); 
-        }
+        // Firestore e l'unica fonte del calendario: NON ripubblicare turni vecchi
+        // quando un amministratore ha eliminato tutte le date.
+        s.forEach(d => { const raw = {id: d.id, ...d.data()}; state.dates.push({...raw, studyPath: canonicalOpenDayStudyPath(raw.studyPath)}); });
         window.renderHomeDates(); 
         if (state.currentView === 'admin') window.renderAdminDatesList();
         populateFilters();
@@ -2190,6 +2186,141 @@ Preferenza: ${openDayLiceoPreferenceLabel(regData)}` : regData.studyPath; docume
       await window.SmartEmailEngine.flushNow();
     }
     window.checkAndSendPromemoria = checkAndSendPromemoria;
+
+
+    // OPEN_DAY_LS_RESCHEDULE_2026_V1: trasferimento esplicito in Area Docenti.
+    // Nessun dato viene modificato alla visita della pagina.
+    const LS_MOVE_TAG = 'ls-2026-11-14-0900-to-2026-11-04-0915';
+    function lsSlotMatches(slot, day, from, to) {
+      const times = (String(slot.timeSlot || '').match(/\d{1,2}:\d{2}/g) || [])
+        .map(x => x.padStart(5, '0'));
+      return slot.date === day && times[0] === from && times[1] === to &&
+        isOpenDayLiceoPath(slot.studyPath);
+    }
+    async function lsLoadFresh() {
+      const root = ['artifacts', appId, 'public', 'data'];
+      const results = await Promise.all([
+        getDocs(collection(db, ...root, 'dates')),
+        getDocs(collection(db, ...root, 'registrations'))
+      ]);
+      const dates = results[0].docs.map(x => ({...x.data(), id: x.id}));
+      const registrations = results[1].docs.map(x => ({...x.data(), id: x.id}));
+      const sources = dates.filter(d => lsSlotMatches(d, '2026-11-14', '09:00', '11:00'));
+      const targets = dates.filter(d => lsSlotMatches(d, '2026-11-04', '09:15', '10:45'));
+      if (sources.length !== 1 || targets.length !== 1 || sources[0].id === targets[0].id)
+        throw Error('DATE_NOT_UNIQUE');
+      return {source: sources[0], target: targets[0], registrations};
+    }
+    function lsCheckTransfer(data) {
+      const {source, target, registrations} = data;
+      const moving = activeRegistrationsFor(source.id, registrations);
+      const seats = moving.reduce((sum,r) => sum + seatsOf(r), 0);
+      // 6/120 e un totale di posti, non necessariamente sei diverse pratiche.
+      if (!moving.length || seats !== 6) throw Error('SOURCE_NOT_SIX_SEATS');
+      if (moving.some(r => !r.code || r.id !== r.code || r.rescheduleBatch))
+        throw Error('SOURCE_UNEXPECTED_RECORD');
+      if (waitlistQueueFor(target.id, registrations).length) throw Error('TARGET_WAITLIST');
+      if (!Number.isFinite(Number(target.maxSeats)) ||
+          activeSeatsFor(target.id, registrations) + seats > Number(target.maxSeats))
+        throw Error('TARGET_FULL');
+      if (canonicalOpenDayStudyPath(source.studyPath) !== canonicalOpenDayStudyPath(target.studyPath))
+        throw Error('PATH_MISMATCH');
+      const existing = activeRegistrationsFor(target.id, registrations);
+      for (const reg of moving) {
+        if (existing.some(r =>
+          normalizeWaitlistText(r.email) === normalizeWaitlistText(reg.email) &&
+          normalizeWaitlistText(r.cognome) === normalizeWaitlistText(reg.cognome) &&
+          normalizeWaitlistText(r.nome) === normalizeWaitlistText(reg.nome)))
+          throw Error('DUPLICATE_IN_TARGET');
+      }
+      return {moving, seats};
+    }
+    function lsTransferError(e) {
+      const labels = {
+        DATE_NOT_UNIQUE: 'Turno del 14/11 o del 04/11 non trovato in modo univoco nel database: nessun dato cambiato.',
+        SOURCE_NOT_SIX_SEATS: 'I posti attivi del 14/11 non sono esattamente 6: verifica i dati prima di procedere.',
+        SOURCE_UNEXPECTED_RECORD: 'Una prenotazione non ha un codice valido o risulta gia trasferita.',
+        TARGET_WAITLIST: 'Il turno del 04/11 ha una lista d’attesa: trasferimento bloccato per non scavalcarla.',
+        TARGET_FULL: 'Capienza insufficiente o non valida nella destinazione.',
+        PATH_MISMATCH: 'I due turni appartengono a indirizzi differenti.',
+        DUPLICATE_IN_TARGET: 'Una prenotazione dello stesso studente e gia presente il 04/11.',
+        LOCKED: 'Un turno e in aggiornamento. Riprova.',
+        STALE_SOURCE: 'Le iscrizioni sono cambiate durante la verifica: nessun trasferimento.',
+        NO_MIGRATED_RECORDS: 'Non risultano sei posti trasferiti da questa procedura.'
+      };
+      return labels[e && e.message] || 'Operazione non completata: ' + (e && e.message || 'errore sconosciuto');
+    }
+    async function moveLsSixSeatsToNovemberFourth() {
+      if (!state.isAdminAuthed || !state.user) return showToast('Accesso Area Docenti necessario.', 'error');
+      const locks = [];
+      try {
+        const preview = await lsLoadFresh();
+        const first = lsCheckTransfer(preview);
+        const current = activeSeatsFor(preview.target.id, preview.registrations);
+        if (!confirm(
+          'SPOSTAMENTO OPEN DAY\n' + first.moving.length + ' prenotazioni / ' + first.seats +
+          ' posti: 14/11/2026 09:00–11:00 → 04/11/2026 09:15–10:45.\n' +
+          'Destinazione: ' + current + ' + ' + first.seats + ' / ' + preview.target.maxSeats +
+          '.\nI codici e i dati dei partecipanti restano invariati. Non vengono inviate email ora. Confermi?'
+        )) return;
+        for (const id of [preview.source.id, preview.target.id].sort()) {
+          if (!(await acquireOpenDayWaitlistLock(id))) throw Error('LOCKED');
+          locks.push(id);
+        }
+        const fresh = await lsLoadFresh();
+        const checked = lsCheckTransfer(fresh);
+        if (fresh.source.id !== preview.source.id || fresh.target.id !== preview.target.id ||
+          checked.moving.map(r=>r.id + ':' + seatsOf(r)).sort().join('|') !==
+          first.moving.map(r=>r.id + ':' + seatsOf(r)).sort().join('|'))
+          throw Error('STALE_SOURCE');
+        const dateStr = new Date(fresh.target.date + 'T12:00:00').toLocaleDateString('it-IT') +
+          ' • ' + fresh.target.timeSlot;
+        const batch = writeBatch(db), movedAt = Date.now();
+        for (const r of checked.moving) {
+          batch.update(doc(db,'artifacts',appId,'public','data','registrations',r.id), {
+            dateId: fresh.target.id, dateStr,
+            studyPath: canonicalOpenDayStudyPath(fresh.target.studyPath),
+            rescheduleBatch: LS_MOVE_TAG, rescheduledAt: movedAt,
+            rescheduledFromDateId: fresh.source.id,
+            rescheduledOriginalDateStr: r.dateStr || '',
+            rescheduleConfirmationQueuedAt: null
+          });
+        }
+        await batch.commit(); // Tutti i record insieme o nessuno: nessuna cancellazione.
+        showToast('Trasferite ' + checked.moving.length + ' prenotazioni / ' + checked.seats + ' posti. Ora puoi accodare le email aggiornate.', 'success');
+      } catch(e) {
+        console.error('LS reschedule', e);
+        showToast(lsTransferError(e), 'error');
+      } finally {
+        for (const id of locks.reverse()) await releaseOpenDayWaitlistLock(id);
+      }
+    }
+    window.moveLsSixSeatsToNovemberFourth = moveLsSixSeatsToNovemberFourth;
+
+    async function queueLsRescheduledConfirmations() {
+      if (!state.isAdminAuthed || !state.user) return showToast('Accesso Area Docenti necessario.', 'error');
+      try {
+        const fresh = await lsLoadFresh();
+        const moved = fresh.registrations.filter(r =>
+          r.rescheduleBatch === LS_MOVE_TAG && r.dateId === fresh.target.id && isSeatActiveRegistration(r));
+        const seats = moved.reduce((sum,r) => sum + seatsOf(r), 0);
+        if (!moved.length || seats !== 6 || moved.some(r=>!r.code || r.id!==r.code))
+          throw Error('NO_MIGRATED_RECORDS');
+        if (!confirm('Accodare ' + moved.length + ' conferme con PDF e orario aggiornati? Verifica la quota giornaliera; la consegna va controllata sul servizio Google Apps Script.')) return;
+        const batch = writeBatch(db), queuedAt = Date.now();
+        for (const r of moved)
+          batch.update(doc(db,'artifacts',appId,'public','data','registrations',r.id), {
+            passSentDate: 'IN_CODA_Q1', rescheduleConfirmationQueuedAt: queuedAt
+          });
+        await batch.commit();
+        showToast('Conferme aggiornate accodate. Verifica la consegna presso Google.', 'info');
+        await window.SmartEmailEngine.flushNow();
+      } catch(e) {
+        console.error('LS resend', e);
+        showToast(lsTransferError(e), 'error');
+      }
+    }
+    window.queueLsRescheduledConfirmations = queueLsRescheduledConfirmations;
 
     async function triggerResetDatabase() {
       if (!confirm("ATTENZIONE: Svuotare archivio registrazioni?") || prompt("Scrivi RESET per confermare") !== "RESET") return;
