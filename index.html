@@ -2236,8 +2236,10 @@ Preferenza: ${openDayLiceoPreferenceLabel(regData)}` : regData.studyPath; docume
       const registrations = results[1].docs.map(x => ({...x.data(), id: x.id}));
       const sourcesOnDate = dates.filter(d => lsMatchClock(d, '09:00', '11:00') &&
         lsDay(d.date) === '2026-11-14');
+      // Non scegliere una sessione del 28 novembre solo perche ha lo stesso orario.
+      // Il fallback e ammesso esclusivamente per documenti con data non interpretabile.
       const sourceCandidates = sourcesOnDate.length || !sourceRequired ? sourcesOnDate :
-        dates.filter(d => lsMatchClock(d, '09:00', '11:00') &&
+        dates.filter(d => lsMatchClock(d, '09:00', '11:00') && !lsDay(d.date) &&
           Number(d.maxSeats) === 120 && activeSeatsFor(d.id, registrations) === 6);
       const targetCandidates = dates.filter(d => lsMatchClock(d, '09:15', '10:45') &&
         Number(d.maxSeats) === 300);
