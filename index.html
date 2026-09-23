@@ -1868,7 +1868,7 @@
       let emailError = '';
       if (suggestedDomain) {
         emailError = 'Il dominio @' + domain + ' sembra errato: intendevi @' + suggestedDomain + '? Correggi l’indirizzo prima di proseguire.';
-      } else if (email && !emailField.validity.typeMismatch && !/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i.test(domain)) {
+      } else if (email && !emailField.validity.typeMismatch && !/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i.test(domain)) {
         emailError = 'Controlla il dominio email dopo la @ (ad esempio gmail.com, libero.it o icloud.com).';
       }
       emailField.setCustomValidity(emailError);
