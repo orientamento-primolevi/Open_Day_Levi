@@ -108,6 +108,16 @@
           </div>
         </div>
 
+        <!-- AVVISO EMAIL OPEN DAY: controllo indirizzo prima della prenotazione -->
+        <div role="note" class="rounded-2xl border-2 border-amber-300 bg-amber-50 p-5 shadow-sm flex items-start gap-3">
+          <i data-lucide="mail-warning" class="w-6 h-6 shrink-0 text-amber-700 mt-0.5"></i>
+          <div class="space-y-2">
+            <h3 class="font-outfit font-black text-amber-950 text-base">Attenzione: verifica il tuo indirizzo email</h3>
+            <p class="text-sm font-semibold leading-relaxed text-amber-950">Prima di confermare la prenotazione, controlla attentamente di aver trascritto correttamente il tuo indirizzo email, comprese tutte le lettere e il dominio (ad esempio @gmail.com, @libero.it, @icloud.com).</p>
+            <p class="text-sm font-semibold leading-relaxed text-amber-950">Un indirizzo errato può impedire la ricezione dell'email di conferma e del pass di ingresso. Se la conferma non arriva, controlla anche la cartella Spam / Posta indesiderata.</p>
+          </div>
+        </div>
+
         <div id="datesSection" class="space-y-4 scroll-mt-20">
           <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 border-b border-indigo-200 pb-4">
             <div>
@@ -261,7 +271,14 @@
             </div>
             <div class="grid grid-cols-2 gap-5">
               <div class="space-y-1.5"><label class="text-[11px] font-black text-slate-500 uppercase tracking-wider">Scuola Provenienza *</label><input required type="text" id="formProvenienza" class="w-full p-3 rounded-xl border border-slate-200 bg-white outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Es. Media Seregno"></div>
-              <div class="space-y-1.5"><label class="text-[11px] font-black text-slate-500 uppercase tracking-wider">E-mail Genitore *</label><input required type="email" id="formEmail" class="w-full p-3 rounded-xl border border-slate-200 bg-white outline-none focus:ring-2 focus:ring-indigo-500" placeholder="genitore@email.it"></div>
+              <div class="space-y-1.5"><label class="text-[11px] font-black text-slate-500 uppercase tracking-wider">E-mail Genitore *</label><input required type="email" id="formEmail" autocomplete="email" autocapitalize="off" spellcheck="false" class="w-full p-3 rounded-xl border border-slate-200 bg-white outline-none focus:ring-2 focus:ring-indigo-500" placeholder="genitore@email.it"></div>
+            </div>
+
+            <!-- Doppia verifica email: evita errori di trascrizione prima del salvataggio -->
+            <div class="space-y-1.5">
+              <label for="formEmailConfirm" class="text-[11px] font-black text-slate-500 uppercase tracking-wider">Ripeti l'indirizzo email del genitore *</label>
+              <input required type="email" id="formEmailConfirm" autocomplete="off" autocapitalize="off" spellcheck="false" class="w-full p-3 rounded-xl border border-slate-200 bg-white outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Digita nuovamente la tua email" aria-describedby="openDayEmailValidationMessage">
+              <p id="openDayEmailValidationMessage" class="text-xs font-semibold text-slate-600" aria-live="polite">Riscrivi la stessa email e verifica con attenzione il dominio prima di confermare.</p>
             </div>
 
             <div class="grid grid-cols-2 gap-5 p-4 border border-slate-200 rounded-2xl bg-slate-50/50">
@@ -1819,7 +1836,73 @@
       if(percent === 100) setTimeout(()=>c.classList.add('hidden'), 1000);
     }
 
+    // Controllo limitato al modulo pubblico: nessuna modifica alle email già salvate.
+    const OPEN_DAY_EMAIL_DOMAIN_TYPOS = Object.freeze({
+      'gmial.com': 'gmail.com', 'gmai.com': 'gmail.com',
+      'gmal.com': 'gmail.com', 'gnail.com': 'gmail.com',
+      'gmail.con': 'gmail.com', 'gmail.c0m': 'gmail.com',
+      'gmail.co': 'gmail.com', 'gmail.comm': 'gmail.com',
+      'gmaill.com': 'gmail.com', 'gmaiil.com': 'gmail.com',
+      'libero.con': 'libero.it', 'libero.ti': 'libero.it',
+      'libero.itt': 'libero.it', 'libeor.it': 'libero.it',
+      'libreo.it': 'libero.it', 'libero.i': 'libero.it',
+      'icloud.con': 'icloud.com', 'icloud.co': 'icloud.com',
+      'iclould.com': 'icloud.com', 'icould.com': 'icloud.com',
+      'iclod.com': 'icloud.com', 'icloudd.com': 'icloud.com',
+      'outlook.con': 'outlook.com', 'outlok.com': 'outlook.com',
+      'hotmai.com': 'hotmail.com', 'hotmail.con': 'hotmail.com',
+      'yahoo.con': 'yahoo.com', 'yaho.com': 'yahoo.com',
+      'virgilio.con': 'virgilio.it', 'virgilio.ti': 'virgilio.it'
+    });
+
+    function validateOpenDayBookingEmail(report = false) {
+      const emailField = document.getElementById('formEmail');
+      const confirmField = document.getElementById('formEmailConfirm');
+      const hint = document.getElementById('openDayEmailValidationMessage');
+      if (!emailField || !confirmField || !hint) return false;
+      const email = emailField.value.trim();
+      const confirmation = confirmField.value.trim();
+      const domain = email.includes('@') ? email.slice(email.lastIndexOf('@') + 1).toLowerCase() : '';
+      const suggestedDomain = Object.prototype.hasOwnProperty.call(OPEN_DAY_EMAIL_DOMAIN_TYPOS, domain)
+        ? OPEN_DAY_EMAIL_DOMAIN_TYPOS[domain] : '';
+      let emailError = '';
+      if (suggestedDomain) {
+        emailError = 'Il dominio @' + domain + ' sembra errato: intendevi @' + suggestedDomain + '? Correggi l’indirizzo prima di proseguire.';
+      } else if (email && !emailField.validity.typeMismatch && !/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i.test(domain)) {
+        emailError = 'Controlla il dominio email dopo la @ (ad esempio gmail.com, libero.it o icloud.com).';
+      }
+      emailField.setCustomValidity(emailError);
+      const confirmationError = confirmation && email && confirmation !== email
+        ? 'I due indirizzi email non coincidono. Controllali e riscrivili correttamente.' : '';
+      confirmField.setCustomValidity(confirmationError);
+      const hasError = Boolean(emailError || confirmationError);
+      hint.textContent = emailError || confirmationError ||
+        (email && confirmation && emailField.checkValidity() && confirmField.checkValidity()
+          ? 'Gli indirizzi coincidono. Controlla comunque che la casella email sia quella corretta.'
+          : 'Riscrivi la stessa email e verifica con attenzione il dominio prima di confermare.');
+      hint.className = 'text-xs font-semibold ' + (hasError ? 'text-rose-700' :
+        email && confirmation && emailField.checkValidity() && confirmField.checkValidity() ? 'text-emerald-700' : 'text-slate-600');
+      if (report && (!emailField.checkValidity() || !confirmField.checkValidity())) {
+        const invalidField = emailField.checkValidity() ? confirmField : emailField;
+        invalidField.reportValidity();
+        invalidField.focus();
+        return false;
+      }
+      return emailField.checkValidity() && confirmField.checkValidity();
+    }
+    function initOpenDayBookingEmailValidation() {
+      const emailField = document.getElementById('formEmail');
+      const confirmField = document.getElementById('formEmailConfirm');
+      if (!emailField || !confirmField) return;
+      for (const field of [emailField, confirmField]) {
+        field.addEventListener('input', () => validateOpenDayBookingEmail());
+        field.addEventListener('blur', () => validateOpenDayBookingEmail());
+      }
+    }
+
     async function handleBookingSubmit(e) {
+      // Verifica email e ripetizione PRIMA di acquisire il blocco o salvare una prenotazione.
+      if (!validateOpenDayBookingEmail(true)) { e.preventDefault(); return; }
       e.preventDefault();
       const targetSession = state.dates.find(x => x.id === document.getElementById('formEventId').value);
       const submitBtn = document.getElementById('btnSubmitBooking');
@@ -2546,6 +2629,7 @@ Preferenza: ${openDayLiceoPreferenceLabel(regData)}` : regData.studyPath; docume
     }
 
     function initApp() {
+      initOpenDayBookingEmailValidation();
       startApp();
       initBubbles();
       try { lucide.createIcons(); } catch(e) {}
