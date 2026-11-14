@@ -393,7 +393,7 @@
               <div class="space-y-4">
                 <div>
                   <div class="flex justify-between text-xs font-bold text-slate-500 mb-1">
-                    <span>Quota E-mail Google (Oggi)</span>
+                    <span>Quota contabilizzata dall'app (oggi)</span>
                     <span id="aiQuotaText" class="text-indigo-700">0 / 1500</span>
                   </div>
                   <div class="w-full bg-slate-100 rounded-full h-2.5">
@@ -414,7 +414,7 @@
               </div>
             </div>
             <div class="mt-4 pt-4 border-t border-slate-100">
-               <p class="text-[10px] text-slate-500 font-bold leading-relaxed">Il motore intelligente controlla automaticamente le code ogni 10 secondi e rispetta il limite di 1.500 invii giornalieri. Tieni aperta la dashboard per l'invio progressivo.</p>
+               <p class="text-[10px] text-slate-500 font-bold leading-relaxed">Il motore controlla le code ogni 10 secondi. Il contatore mostra gli invii contabilizzati da questa applicazione, non l'eventuale consumo effettuato da altri servizi sullo stesso account Google. Se Google segnala che la quota reale dell'account è esaurita, gli invii ordinari riprenderanno al rinnovo della quota.</p>
             </div>
           </div>
 
@@ -516,10 +516,10 @@
             
             <div class="space-y-2 border-b pb-4">
               <div class="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-1500">
-                <span class="text-xs font-black text-slate-600 uppercase">E-mail inviate oggi:</span>
+                <span class="text-xs font-black text-slate-600 uppercase">Invii contabilizzati oggi:</span>
                 <span class="text-base font-black text-indigo-700" id="adminEmailQuotaText">0 / 1500</span>
               </div>
-              <p class="text-[10px] text-slate-500 font-bold pt-1 leading-relaxed">Il sistema gestisce una soglia configurata di 1500 invii al giorno. La quota effettiva dipende dal tipo di account Google collegato e dai relativi limiti di invio.</p>
+              <p class="text-[10px] text-slate-500 font-bold pt-1 leading-relaxed">Il contatore è interno all'applicazione. Il limite effettivo di Google Apps Script/MailApp dipende dall'account mittente e può includere invii effettuati da altri script o servizi.</p>
             </div>
 
             <div class="space-y-2">
@@ -948,6 +948,22 @@
       }
     }
 
+    async function releaseOpenDayEmailDeliveryLease(code, type) {
+      const safeId = `${String(code || '').replace(/[^A-Za-z0-9_-]/g, '_')}_${String(type || 'mail')}`;
+      const ref = doc(db, 'artifacts', appId, 'public', 'data', 'email_delivery_locks', safeId);
+      try {
+        await runTransaction(db, async tx => {
+          const snap = await tx.get(ref);
+          if (!snap.exists()) return;
+          const old = snap.data() || {};
+          if (old.owner !== EMAIL_ENGINE_OWNER) return;
+          tx.set(ref, { lockedUntil: 0, releasedAt: Date.now() }, { merge: true });
+        });
+      } catch (e) {
+        console.warn('OpenDay email lease non rilasciata', e);
+      }
+    }
+
     function parseOpenDayLocalDate(dateStr, timeStr = '00:00') {
       const [y, m, d] = String(dateStr || '').split('-').map(Number);
       const [hh, mm] = String(timeStr || '00:00').trim().split(':').map(Number);
@@ -1083,7 +1099,7 @@
       maxDaily: 1500,
       reserveQ1: 40, 
       safeLimit: 90, 
-      batchSize: 5,
+      batchSize: 10,
       intervalMs: 10000, 
       timerId: null,
       isProcessing: false,
@@ -1187,39 +1203,33 @@
           this.updateDashboard(q1.length, q2.length, q3.length);
           if (q1.length + q2.length + q3.length === 0) return;
 
-          if (this.serverQuotaBlockedDate === today) {
-            this.log('Quota effettiva Google esaurita per oggi: la coda resta sospesa fino al prossimo giorno.', 'warning');
-            return;
-          }
-
+          // Il blocco del servizio email ordinario NON deve fermare gli endpoint
+          // dedicati a pass/pergamene. La quota 1.500 viene applicata solo a Q2.
           const availableQuota = this.maxDaily - Number(state.emailQuota.count || 0);
-          if (availableQuota <= 0) {
-            this.log('Limite giornaliero configurato raggiunto: code sospese fino al prossimo giorno.', 'error');
-            const indicator = document.getElementById('engineStatusIndicator');
-            if (indicator) {
-              indicator.className = 'flex items-center gap-1.5 bg-rose-50 text-rose-700 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase border border-rose-200';
-              indicator.innerHTML = '<div class="w-2 h-2 rounded-full bg-rose-500"></div> Bloccato';
-            }
-            return;
-          }
-
-          const permittedBatchSize = Math.max(0, Math.min(this.batchSize, availableQuota));
+          const ordinaryMailBlocked = this.serverQuotaBlockedDate === today || availableQuota <= 0;
           let batchToProcess = [];
           if (q1.length > 0) {
-            batchToProcess = q1.slice(0, permittedBatchSize);
-            this.log(`Elaborazione pergamene/pass Q1: ${batchToProcess.length} email.`);
-          } else if (q2.length > 0) {
+            batchToProcess = q1.slice(0, this.batchSize);
+            this.log(`Elaborazione pass/pergamene di iscrizione Q1: ${batchToProcess.length} richieste (servizio dedicato).`);
+          } else if (q2.length > 0 && !ordinaryMailBlocked) {
+            const permittedBatchSize = Math.max(0, Math.min(this.batchSize, availableQuota));
             batchToProcess = q2.slice(0, permittedBatchSize);
-            this.log(`Elaborazione email ordinarie Q2: ${batchToProcess.length} email.`);
+            this.log(`Elaborazione email ordinarie Q2: ${batchToProcess.length} invii; quota app ${state.emailQuota.count}/${this.maxDaily}.`);
           } else if (q3.length > 0) {
-            batchToProcess = q3.slice(0, permittedBatchSize);
-            this.log(`Elaborazione comunicazioni Q3: ${batchToProcess.length} email.`);
+            batchToProcess = q3.slice(0, this.batchSize);
+            this.log(`Elaborazione attestati/pergamene Q3: ${batchToProcess.length} richieste.`);
+          } else if (q2.length > 0 && ordinaryMailBlocked) {
+            this.log(`Solo Q2 sospesa: servizio email ordinario bloccato o quota app esaurita (${state.emailQuota.count}/${this.maxDaily}). Le altre code restano elaborabili.`, 'warning');
+            return;
           }
 
           for (const item of batchToProcess) {
             await this.dispatchEmail(item);
-            if (this.serverQuotaBlockedDate === today) break;
-            await new Promise(resolve => setTimeout(resolve, 500));
+            if (item.url === MAIL_QUOTA_SCRIPT_URL && this.serverQuotaBlockedDate === today) {
+              this.log('Servizio email ordinario ha segnalato la quota Google esaurita: interrompo Q2, ma le code dedicate restano attive.', 'warning');
+              break;
+            }
+            await new Promise(resolve => setTimeout(resolve, 250));
           }
         } catch (e) {
           this.log(`Errore nel ciclo della coda: ${e.message || e}`, 'error');
@@ -1233,12 +1243,15 @@
         const fieldMap = { pass: 'passSentDate', promemoria: 'promemoriaSentDate', presenza: 'presenzaSentDate', pergamena: 'pergamenaSentDate' };
         const field = fieldMap[item.type];
         if (!field) return false;
+        let leaseAcquired = false;
+        let ambiguousDelivery = false;
         try {
           const leaseOk = await acquireOpenDayEmailDeliveryLease(item.reg.code, item.type);
           if (!leaseOk) {
-            this.log(`Email ${item.type.toUpperCase()} ${item.reg.code}: presa in carico da un altro dispositivo o lock non disponibile.`, 'warning');
+            this.log(`Email ${item.type.toUpperCase()} ${item.reg.code}: lock temporaneo già attivo su un altro dispositivo.`, 'warning');
             return false;
           }
+          leaseAcquired = true;
 
           this.log(`Invio ${item.type.toUpperCase()} per ${item.reg.code} → ${item.reg.email}...`);
           const processingAt = Date.now();
@@ -1268,12 +1281,13 @@
             localReg.lastEmailError = null;
           }
 
-          this.log(`Invio accettato per ${item.reg.email}. Quota conteggiata: ${state.emailQuota.count}/${this.maxDaily}.`, 'success');
+          this.log(`Richiesta accettata per ${item.reg.email}. Contatore app: ${state.emailQuota.count}/${this.maxDaily}.`, 'success');
           this.updateDashboard();
           return true;
         } catch (e) {
           const errorText = String(e.message || e);
-          const quotaError = /limite_giornaliero_1500|quota giornaliera google esaurita|quota.*1500|limit exceeded|service invoked too many times.*email/i.test(errorText);
+          ambiguousDelivery = /nessuna conferma|timeout|failed to fetch|networkerror|network request failed/i.test(errorText);
+          const quotaError = item.url === MAIL_QUOTA_SCRIPT_URL && /limite_giornaliero_1500|quota giornaliera google esaurita|quota.*1500|limit exceeded|service invoked too many times.*email/i.test(errorText);
           if (quotaError) this.serverQuotaBlockedDate = new Date().toLocaleDateString('it-IT');
           this.log(`Errore email ${item.reg.code}: ${errorText}. Reinserimento in coda.`, 'error');
           await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', item.reg.code), {
@@ -1287,6 +1301,12 @@
           }
           this.updateDashboard();
           return false;
+        } finally {
+          // In caso di timeout ambiguo il lock scade da solo dopo 60 secondi:
+          // non lo liberiamo subito, per ridurre il rischio di doppio invio.
+          if (leaseAcquired && !ambiguousDelivery) {
+            await releaseOpenDayEmailDeliveryLease(item.reg.code, item.type);
+          }
         }
       },
 
@@ -1331,6 +1351,13 @@
         }
       }
 
+      // Se il contatore locale è sotto 1.500, il comando manuale consente una
+      // nuova verifica del servizio principale; un vero errore di quota restituito
+      // da Google lo bloccherà nuovamente dopo il primo tentativo.
+      if (Number(state.emailQuota.count || 0) < window.SmartEmailEngine.maxDaily) {
+        window.SmartEmailEngine.serverQuotaBlockedDate = null;
+      }
+
       const queuedFields = ['passSentDate', 'promemoriaSentDate', 'presenzaSentDate', 'pergamenaSentDate'];
       const queuedCount = () => (state.registrations || []).reduce((sum, reg) =>
         sum + queuedFields.filter(field => String(reg[field] || '').includes('IN_CODA')).length, 0);
@@ -1349,19 +1376,24 @@
       for (let round = 0; round < maxRounds; round++) {
         await window.SmartEmailEngine.flushNow();
         completedRounds++;
-        await new Promise(resolve => setTimeout(resolve, 250));
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
         const remaining = queuedCount();
         if (remaining === 0) break;
 
         const today = new Date().toLocaleDateString('it-IT');
-        if (window.SmartEmailEngine.serverQuotaBlockedDate === today || Number(state.emailQuota.count || 0) >= window.SmartEmailEngine.maxDaily) break;
+        const ordinaryQuotaBlocked = window.SmartEmailEngine.serverQuotaBlockedDate === today || Number(state.emailQuota.count || 0) >= window.SmartEmailEngine.maxDaily;
+        const dedicatedPending = (state.registrations || []).some(reg =>
+          ['passSentDate', 'presenzaSentDate', 'pergamenaSentDate'].some(field => String(reg[field] || '').includes('IN_CODA'))
+        );
+        // Non fermare il recupero delle pergamene/attestati se è bloccato solo Q2.
+        if (ordinaryQuotaBlocked && !dedicatedPending) break;
 
         const signature = queueSignature();
         unchangedRounds = signature === previousSignature ? unchangedRounds + 1 : 0;
         previousSignature = signature;
-        if (unchangedRounds >= 4) {
-          window.SmartEmailEngine.log('Coda temporaneamente ferma: verificare lock, servizio Google o errori nel registro.', 'warning');
+        if (unchangedRounds >= 12) {
+          window.SmartEmailEngine.log('Coda ancora invariata dopo 12 controlli: verificare il messaggio di errore del servizio o eventuali lock su un altro dispositivo.', 'warning');
           break;
         }
         if (completedRounds % 10 === 0) {
@@ -1373,8 +1405,9 @@
       window.SmartEmailEngine.updateDashboard();
       if (remaining === 0) {
         showToast('Coda email svuotata: tutti gli invii disponibili sono stati elaborati.', 'success');
-      } else if (Number(state.emailQuota.count || 0) >= window.SmartEmailEngine.maxDaily || window.SmartEmailEngine.serverQuotaBlockedDate === new Date().toLocaleDateString('it-IT')) {
-        showToast(`Quota giornaliera di 1.500 raggiunta: ${remaining} email restano in coda e potranno ripartire al rinnovo della quota.`, 'warning');
+      } else if ((Number(state.emailQuota.count || 0) >= window.SmartEmailEngine.maxDaily || window.SmartEmailEngine.serverQuotaBlockedDate === new Date().toLocaleDateString('it-IT')) &&
+        !(state.registrations || []).some(reg => ['passSentDate', 'presenzaSentDate', 'pergamenaSentDate'].some(field => String(reg[field] || '').includes('IN_CODA')))) {
+        showToast(`Servizio email ordinario bloccato dalla quota: ${remaining} email ordinarie restano in coda. Le pergamene dedicate sono state comunque elaborate.`, 'warning');
       } else {
         showToast(`Elaborazione interrotta: ${remaining} email restano in coda. Controlla il registro del Motore E-mail.`, 'warning');
       }
@@ -1395,12 +1428,17 @@
     window.checkAndIncrementQuota = checkAndIncrementQuota;
 
     async function inviaEmailScript(url, payload) {
-      // Tutti gli invii, inclusi recuperi, lista d'attesa e annullamenti, consumano
-      // la stessa quota giornaliera. La prenotazione transazionale evita sforamenti.
-      const quotaReservation = await reserveOpenDayEmailQuotaSlot();
-      if (!quotaReservation.reserved) {
-        if (window.SmartEmailEngine) window.SmartEmailEngine.serverQuotaBlockedDate = quotaReservation.date;
-        throw new Error('LIMITE_GIORNALIERO_1500_RAGGIUNTA: email lasciata in coda.');
+      // Il contatore interno da 1.500 governa SOLO lo script delle email ordinarie.
+      // Pass e pergamene usano i rispettivi endpoint dedicati e non devono essere
+      // bloccati dal contatore locale del servizio email ordinario.
+      const usesOrdinaryMailQuota = url === MAIL_QUOTA_SCRIPT_URL;
+      let quotaReservation = null;
+      if (usesOrdinaryMailQuota) {
+        quotaReservation = await reserveOpenDayEmailQuotaSlot();
+        if (!quotaReservation.reserved) {
+          if (window.SmartEmailEngine) window.SmartEmailEngine.serverQuotaBlockedDate = quotaReservation.date;
+          throw new Error('LIMITE_GIORNALIERO_1500_RAGGIUNTA: email lasciata in coda.');
+        }
       }
 
       try {
@@ -1449,13 +1487,22 @@
               fn(value);
             };
             const onMessage = event => {
+              // Accetta le varianti di risposta inviate dallo stesso iframe:
+              // {source,token,ok}, {requestId,success}, oppure {ok:true}.
               if (event.source !== frame.contentWindow) return;
-              const data = event.data || {};
-              if (data.source !== 'OPEN_DAY_MAIL' || data.token !== token) return;
-              if (data.ok === true) finish(resolve, data);
-              else finish(reject, new Error(data.message || 'Invio rifiutato da Google Apps Script.'));
+              let data = event.data || {};
+              if (typeof data === 'string') {
+                try { data = JSON.parse(data); } catch (_) { return; }
+              }
+              if (!data || typeof data !== 'object') return;
+              const responseToken = data.token || data.requestId || data.request_id;
+              if (responseToken && responseToken !== token && responseToken !== normalizedPayload.requestId) return;
+              const success = data.ok === true || data.success === true || data.status === 'ok' || data.status === 'success';
+              const failure = data.ok === false || data.success === false || data.status === 'error';
+              if (success) finish(resolve, { ...data, ok: true });
+              else if (failure) finish(reject, new Error(data.message || data.error || 'Invio rifiutato da Google Apps Script.'));
             };
-            const timeoutId = setTimeout(() => finish(reject, new Error('Nessuna conferma da Google Apps Script entro 60 secondi. Controlla Esecuzioni in Apps Script prima di riprovare.')), 60000);
+            const timeoutId = setTimeout(() => finish(reject, new Error('Nessuna conferma da Google Apps Script entro 60 secondi. Il nuovo endpoint deve restituire un postMessage di esito dal doPost; controlla Esecuzioni in Apps Script per verificare se l'invio è partito prima di riprovare.')), 60000);
             window.addEventListener('message', onMessage);
             try { form.submit(); }
             catch (e) { finish(reject, e); }
@@ -1474,14 +1521,12 @@
         const errorText = String(e.message || e);
         const quotaError = /quota giornaliera google esaurita|quota.*1500|limit exceeded|service invoked too many times.*email/i.test(errorText);
         const ambiguousDelivery = /nessuna conferma|timeout|failed to fetch|networkerror|network request failed/i.test(errorText);
-        if (quotaError && window.SmartEmailEngine) {
+        if (quotaError && usesOrdinaryMailQuota && window.SmartEmailEngine) {
           window.SmartEmailEngine.serverQuotaBlockedDate = new Date().toLocaleDateString('it-IT');
         }
-        // Un timeout può verificarsi dopo la spedizione: in quel caso non liberiamo
-        // lo slot, per evitare un reinvio che porti oltre la quota Google effettiva.
-        if (!ambiguousDelivery && !quotaError) {
-          await releaseOpenDayEmailQuotaSlot(quotaReservation.date);
-        } else if (quotaError) {
+        // In caso di timeout ambiguo non liberare la prenotazione: lo script
+        // potrebbe avere già spedito il messaggio prima di perdere la risposta.
+        if (usesOrdinaryMailQuota && quotaReservation && !ambiguousDelivery) {
           await releaseOpenDayEmailQuotaSlot(quotaReservation.date);
         }
         throw e;
