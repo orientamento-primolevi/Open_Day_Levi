@@ -360,7 +360,7 @@
       <div id="adminQuotaAlert" class="hidden bg-orange-100 border-l-4 border-orange-500 text-orange-700 p-4 rounded shadow-sm mb-4">
         <div class="flex items-center gap-2 font-bold">
           <i data-lucide="alert-triangle" class="w-5 h-5"></i>
-          <span>Limite Invio Email Google Raggiunto! (100/giorno). Le nuove iscrizioni e gli ingressi verranno salvati in coda per evitare blocchi al sistema.</span>
+          <span>Limite giornaliero di invio raggiunto (1500 invii/giorno configurati). Le nuove iscrizioni e gli ingressi verranno salvati in coda per evitare blocchi al sistema.</span>
         </div>
       </div>
 
@@ -518,7 +518,7 @@
                 <span class="text-xs font-black text-slate-600 uppercase">E-mail inviate oggi:</span>
                 <span class="text-base font-black text-indigo-700" id="adminEmailQuotaText">0 / 1500</span>
               </div>
-              <p class="text-[10px] text-slate-500 font-bold pt-1 leading-relaxed">Google Apps Script impone un limite gratuito di 100 email al giorno. Il sistema sospenderà in automatico gli invii se si avvicina al limite per prevenire blocchi.</p>
+              <p class="text-[10px] text-slate-500 font-bold pt-1 leading-relaxed">Il sistema gestisce una soglia configurata di 1500 invii al giorno. La quota effettiva dipende dal tipo di account Google collegato e dai relativi limiti di invio.</p>
             </div>
 
             <div class="space-y-2">
@@ -1008,8 +1008,8 @@
       maxDaily: 1500,
       reserveQ1: 40, 
       safeLimit: 90, 
-      batchSize: 2,  
-      intervalMs: 30000, 
+      batchSize: 10,  
+      intervalMs: 5000, 
       timerId: null,
       isProcessing: false,
       
@@ -1121,7 +1121,6 @@
 
         for (const item of batchToProcess) {
            await this.dispatchEmail(item);
-           await new Promise(r => setTimeout(r, 1000));
         }
 
         this.isProcessing = false;
@@ -1165,13 +1164,13 @@
       },
 
       updateDashboard(q1=0, q2=0, q3=0) {
-        if(document.getElementById('aiQuotaText')) document.getElementById('aiQuotaText').innerText = `${state.emailQuota.count} / 100`;
-        if(document.getElementById('aiQuotaBar')) document.getElementById('aiQuotaBar').style.width = `${state.emailQuota.count}%`;
+        if(document.getElementById('aiQuotaText')) document.getElementById('aiQuotaText').innerText = `${state.emailQuota.count} / ${this.maxDaily}`;
+        if(document.getElementById('aiQuotaBar')) document.getElementById('aiQuotaBar').style.width = `${Math.min(100, (state.emailQuota.count / this.maxDaily) * 100)}%`;
         if(document.getElementById('aiQueueTotal')) document.getElementById('aiQueueTotal').innerText = q1+q2+q3;
         if(document.getElementById('q1Count')) document.getElementById('q1Count').innerText = q1;
         if(document.getElementById('q2Count')) document.getElementById('q2Count').innerText = q2;
         if(document.getElementById('q3Count')) document.getElementById('q3Count').innerText = q3;
-        if(document.getElementById('adminEmailQuotaText')) document.getElementById('adminEmailQuotaText').innerText = `${state.emailQuota.count} / 100`;
+        if(document.getElementById('adminEmailQuotaText')) document.getElementById('adminEmailQuotaText').innerText = `${state.emailQuota.count} / ${this.maxDaily}`;
       }
     };
     window.SmartEmailEngine = SmartEmailEngine;
@@ -1189,7 +1188,7 @@
           data = { date: today, count: 0 };
         }
         
-        if (data.count >= 95) { 
+        if (data.count >= 1500) { 
           return false; 
         }
         
