@@ -360,7 +360,7 @@
       <div id="adminQuotaAlert" class="hidden bg-orange-100 border-l-4 border-orange-500 text-orange-700 p-4 rounded shadow-sm mb-4">
         <div class="flex items-center gap-2 font-bold">
           <i data-lucide="alert-triangle" class="w-5 h-5"></i>
-          <span>Limite giornaliero di invio raggiunto (1500 invii/giorno configurati). Le nuove iscrizioni e gli ingressi verranno salvati in coda per evitare blocchi al sistema.</span>
+          <span>Limite giornaliero di invio raggiunto (1500 invii/giorno configurati). Le nuove iscrizioni e gli ingressi restano salvati in coda e ripartono quando la quota giornaliera torna disponibile.</span>
         </div>
       </div>
 
@@ -408,13 +408,13 @@
                   </div>
                   <div class="bg-slate-50 border border-slate-100 p-3 rounded-xl text-center">
                     <span class="block text-[9px] font-black text-slate-400 uppercase">Timer Aggiornamento</span>
-                    <span class="block text-xl font-black text-emerald-600" id="aiTimerTotal">30s</span>
+                    <span class="block text-xl font-black text-emerald-600" id="aiTimerTotal">10s</span>
                   </div>
                 </div>
               </div>
             </div>
             <div class="mt-4 pt-4 border-t border-slate-100">
-               <p class="text-[10px] text-slate-500 font-bold leading-relaxed">Il motore intelligente elabora automaticamente le code ogni 30 secondi, preservando la quota giornaliera di Gmail. Tieni questa dashboard aperta per l'invio asincrono.</p>
+               <p class="text-[10px] text-slate-500 font-bold leading-relaxed">Il motore intelligente controlla automaticamente le code ogni 10 secondi e rispetta il limite di 1.500 invii giornalieri. Tieni aperta la dashboard per l'invio progressivo.</p>
             </div>
           </div>
 
@@ -452,6 +452,7 @@
                  <button onclick="window.SmartEmailEngine.flushNow()" class="text-[9px] bg-slate-700 hover:bg-slate-600 text-white px-2 py-1 rounded font-bold uppercase transition">Forza Esecuzione Ora</button>
                </div>
                <div id="engineConsoleLog" class="system-log flex-grow overflow-y-auto text-[10px] font-mono text-emerald-400 space-y-1.5 scroll-smooth">
+                  <div><span class="text-slate-500">[INFO]</span> Il motore lavora mentre l’Area Docenti o la modalità scanner resta aperta.</div>
                   <div><span class="text-slate-500">[--:--:--]</span> Sistema pronto. In attesa di dati...</div>
                </div>
             </div>
@@ -844,10 +845,12 @@
       if (!liceo) select.value = '';
     }
 
-    // --- SOSTITUISCI QUESTI LINK CON I TUOI SCRIPT GOOGLE REALI ---
-    const CONFIRM_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwbupK4JchmR2f6JIdfJKU5chOedSmQGg8HiI9TqPoTtyeKs3YoknpbPAyo6NW4OXZb/exec"; 
-    const CANCEL_SCRIPT_URL = "https://script.google.com/macros/s/AKfycby27Bw2o_0iLbISpOUdodrbdHGktAb17KGPpHjQgUjt9i1cgOxMvrXNSBKY1absG2Xi/exec"; 
-    const ATTESTATO_ENTRATA_URL = "https://script.google.com/macros/s/AKfycbyDtMFf0-iZ6oE1CioLBo5Oysf4RFZpz33VamqehEBn3ebVMK3994HobyQ7ohtXgd8/exec"; 
+    // Endpoint distinti: email ordinarie (quota 1.500/giorno) e pergamena/pass di iscrizione.
+    const MAIL_QUOTA_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyqDpRJZXKIP535VhwnRiFNPGJpvcg8mQujrRw112kbKMfGDk-FX3X8Nsx-ksaPQORU/exec";
+    const CONFIRM_SCRIPT_URL = MAIL_QUOTA_SCRIPT_URL;
+    const CANCEL_SCRIPT_URL = "https://script.google.com/macros/s/AKfycby27Bw2o_0iLbISpOUdodrbdHGktAb17KGPpHjQgUjt9i1cgOxMvrXNSBKY1absG2Xi/exec";
+    const REGISTRATION_PARCHMENT_URL = "https://script.google.com/macros/s/AKfycbyDtMFf0-iZ6oE1CioLBo5Oysf4RFZpz33VamqehEBn3ebVMK3994HobyQ7ohtXgd8/exec";
+    const ATTESTATO_ENTRATA_URL = REGISTRATION_PARCHMENT_URL;
     const ATTESTATO_USCITA_URL = "https://script.google.com/macros/s/AKfycbwFGiLseS5YS8Wyb-p9gMZcG_9HfvUuU68r6MGMHtm5jc6b3n1S3gMGy8kcVjko5S1s/exec";
 
     let state = { 
@@ -964,26 +967,53 @@
 
     async function reconcileScheduledOpenDayEmails() {
       const now = Date.now();
-      const reminderDays = Math.max(0, Number(window.promemoriaDays ?? 7) || 7);
+      const configuredDays = Number(window.promemoriaDays ?? 7);
+      const reminderDays = Number.isFinite(configuredDays) && configuredDays > 0 ? configuredDays : 7;
       const writes = [];
 
-      for (const reg of state.registrations) {
-        if (isWaitlistRegistration(reg)) continue;
+      // Se il pannello Docenti si apre prima che il listener realtime abbia caricato
+      // il calendario, recupera i turni direttamente da Firestore.
+      if (!Array.isArray(state.dates) || state.dates.length === 0) {
+        try {
+          const datesSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'dates'));
+          state.dates = datesSnap.docs.map(d => {
+            const raw = { id: d.id, ...d.data() };
+            return { ...raw, studyPath: canonicalOpenDayStudyPath(raw.studyPath) };
+          });
+        } catch (e) {
+          console.warn('OpenDay promemoria: calendario non disponibile', e);
+          return;
+        }
+      }
+
+      for (const reg of (state.registrations || [])) {
+        if (!reg || isWaitlistRegistration(reg)) continue;
+        if (String(reg.type || '').toLowerCase() === 'cancellazione') continue;
+        if (normalizeWaitlistText(reg.status) === 'annullato') continue;
+
         const slot = state.dates.find(d => d.id === reg.dateId);
         if (!slot) continue;
 
+        // Il promemoria viene messo in coda una sola volta quando il turno
+        // è futuro e rientra nella finestra configurata (7 giorni di default).
         if (!reg.promemoriaSentDate && slot.date) {
-          const startTime = String(slot.timeSlot || '00:00').includes('-') ? String(slot.timeSlot).split('-')[0].trim() : String(slot.timeSlot || '00:00').trim();
+          const startTime = String(slot.timeSlot || '00:00').includes('-')
+            ? String(slot.timeSlot).split('-')[0].trim()
+            : String(slot.timeSlot || '00:00').trim();
           const start = parseOpenDayLocalDate(slot.date, startTime);
           if (start) {
-            const diffDays = Math.ceil((start.getTime() - now) / 86400000);
-            if (diffDays >= 0 && diffDays <= reminderDays) {
+            const remainingMs = start.getTime() - now;
+            if (remainingMs > 0 && remainingMs <= reminderDays * 86400000) {
               reg.promemoriaSentDate = 'IN_CODA_Q2';
-              writes.push(updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', reg.code), { promemoriaSentDate: 'IN_CODA_Q2' }));
+              writes.push(updateDoc(
+                doc(db, 'artifacts', appId, 'public', 'data', 'registrations', reg.code),
+                { promemoriaSentDate: 'IN_CODA_Q2', promemoriaQueuedAt: now }
+              ));
             }
           }
         }
 
+        // Chiusura turno e accodamento pergamena cinque minuti dopo la fine.
         if (reg.status === 'Ammesso' && !reg.pergamenaSentDate) {
           const dueAt = openDayEventEndPlusFive(reg);
           if (dueAt && now >= dueAt) {
@@ -1000,18 +1030,64 @@
         }
       }
 
-      if (writes.length) await Promise.allSettled(writes);
+      if (writes.length) {
+        const results = await Promise.allSettled(writes);
+        const failures = results.filter(r => r.status === 'rejected');
+        if (failures.length) console.warn(`OpenDay: ${failures.length} aggiornamenti promemoria/pergamena non riusciti.`, failures);
+      }
     }
     window.reconcileScheduledOpenDayEmails = reconcileScheduledOpenDayEmails;
+
+    // Prenotazione atomica di un invio: il contatore non può superare 1.500
+    // anche se più dispositivi elaborano contemporaneamente la stessa coda.
+    async function reserveOpenDayEmailQuotaSlot() {
+      const today = new Date().toLocaleDateString('it-IT');
+      const quotaRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'email_quota');
+      const result = await runTransaction(db, async tx => {
+        const snap = await tx.get(quotaRef);
+        const stored = snap.exists() ? snap.data() : {};
+        const current = stored.date === today ? Math.max(0, Number(stored.count || 0)) : 0;
+        if (current >= 1500) return { reserved: false, date: today, count: current };
+        const next = current + 1;
+        tx.set(quotaRef, { date: today, count: next, updatedAt: Date.now() });
+        return { reserved: true, date: today, count: next };
+      });
+      state.emailQuota = { date: result.date, count: result.count };
+      if (window.SmartEmailEngine) window.SmartEmailEngine.updateDashboard();
+      return result;
+    }
+
+    async function releaseOpenDayEmailQuotaSlot(reservedDate) {
+      if (!reservedDate) return;
+      const quotaRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'email_quota');
+      try {
+        const result = await runTransaction(db, async tx => {
+          const snap = await tx.get(quotaRef);
+          if (!snap.exists()) return null;
+          const stored = snap.data();
+          if (stored.date !== reservedDate) return null;
+          const next = Math.max(0, Number(stored.count || 0) - 1);
+          tx.set(quotaRef, { ...stored, count: next, updatedAt: Date.now() });
+          return { date: reservedDate, count: next };
+        });
+        if (result) {
+          state.emailQuota = result;
+          if (window.SmartEmailEngine) window.SmartEmailEngine.updateDashboard();
+        }
+      } catch (e) {
+        console.warn('OpenDay: impossibile liberare la prenotazione quota email', e);
+      }
+    }
 
     const SmartEmailEngine = {
       maxDaily: 1500,
       reserveQ1: 40, 
       safeLimit: 90, 
-      batchSize: 10,  
-      intervalMs: 5000, 
+      batchSize: 5,
+      intervalMs: 10000, 
       timerId: null,
       isProcessing: false,
+      serverQuotaBlockedDate: null,
       
       start() {
         if(this.timerId) clearInterval(this.timerId);
@@ -1030,6 +1106,7 @@
 
       async flushNow() {
         this.log("Esecuzione forzata manuale...");
+        while (this.isProcessing) await new Promise(resolve => setTimeout(resolve, 150));
         return this.processQueues();
       },
 
@@ -1045,121 +1122,171 @@
       async processQueues() {
         if (this.isProcessing) return;
         this.isProcessing = true;
-
-        // Ricarica sempre la coda direttamente da Firestore prima di elaborarla.
-        // Evita che una prenotazione appena salvata resti bloccata in IN_CODA
-        // perché il listener realtime non ha ancora aggiornato state.registrations.
         try {
-          const latestSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'registrations'));
-          const latestRegistrations = [];
-          latestSnap.forEach(d => latestRegistrations.push({ id: d.id, ...d.data() }));
-          state.registrations = latestRegistrations;
-        } catch (e) {
-          this.log("Aggiornamento coda da Firebase non riuscito: uso lo snapshot locale.", "warning");
-        }
-
-        // Accoda automaticamente i promemoria dovuti e chiude gli eventi 5 minuti
-        // dopo la fine, anche se il timeout originario della pagina e stato perso.
-        await reconcileScheduledOpenDayEmails();
-
-        const today = new Date().toLocaleDateString('it-IT');
-        let quotaSnap;
-        try { quotaSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'email_quota')); } catch(e){}
-        if (quotaSnap && quotaSnap.exists()) {
-          state.emailQuota = quotaSnap.data();
-          if (state.emailQuota.date !== today) { state.emailQuota = { date: today, count: 0 }; }
-        } else { state.emailQuota = { date: today, count: 0 }; }
-        
-        let q1 = [], q2 = [], q3 = [];
-        
-        state.registrations.forEach(r => {
-          if (r.passSentDate && r.passSentDate.includes('IN_CODA')) q1.push({reg: r, type: 'pass', url: CONFIRM_SCRIPT_URL});
-          if (r.promemoriaSentDate && r.promemoriaSentDate.includes('IN_CODA')) q2.push({reg: r, type: 'promemoria', url: CONFIRM_SCRIPT_URL});
-          if (r.presenzaSentDate && r.presenzaSentDate.includes('IN_CODA')) q3.push({reg: r, type: 'presenza', url: ATTESTATO_ENTRATA_URL});
-          if (r.pergamenaSentDate && r.pergamenaSentDate.includes('IN_CODA')) q3.push({reg: r, type: 'pergamena', url: ATTESTATO_USCITA_URL});
-        });
-
-        this.updateDashboard(q1.length, q2.length, q3.length);
-
-        if (q1.length === 0 && q2.length === 0 && q3.length === 0) {
-          this.isProcessing = false;
-          return; 
-        }
-        
-        let availableQuota = this.maxDaily - state.emailQuota.count;
-        
-        if (availableQuota <= 0) {
-          this.log("LIMITE GIORNALIERO RAGGIUNTO! Tutte le code sono sospese fino a domani.", "error");
-          const indicator = document.getElementById('engineStatusIndicator');
-          if (indicator) {
-            indicator.className = "flex items-center gap-1.5 bg-rose-50 text-rose-700 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase border border-rose-200";
-            indicator.innerHTML = '<div class="w-2 h-2 rounded-full bg-rose-500"></div> Bloccato';
+          // Fonte autorevole della coda: ricarica sempre le registrazioni da Firestore.
+          try {
+            const latestSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'registrations'));
+            state.registrations = latestSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+          } catch (e) {
+            this.log(`Aggiornamento coda Firebase non riuscito: ${e.message || e}`, 'warning');
           }
+
+          // Recupera automaticamente i processi interrotti da oltre 3 minuti.
+          // Le vecchie voci ELABORAZIONE senza timestamp vengono lasciate intatte:
+          // potrebbero essere state spedite prima dell'interruzione e richiedono verifica.
+          const now = Date.now();
+          const staleWrites = [];
+          const queueFields = ['passSentDate', 'promemoriaSentDate', 'presenzaSentDate', 'pergamenaSentDate'];
+          for (const reg of (state.registrations || [])) {
+            for (const field of queueFields) {
+              const status = String(reg[field] || '');
+              const processingAt = Number(reg.emailProcessingAt || 0);
+              if (status.includes('ELABORAZIONE') && processingAt && now - processingAt > 180000) {
+                staleWrites.push(updateDoc(
+                  doc(db, 'artifacts', appId, 'public', 'data', 'registrations', reg.code || reg.id),
+                  { [field]: 'IN_CODA_RETRY', emailProcessingAt: null, lastEmailError: 'Elaborazione interrotta: reinserita automaticamente in coda.' }
+                ));
+                reg[field] = 'IN_CODA_RETRY';
+                reg.emailProcessingAt = null;
+              }
+            }
+          }
+          if (staleWrites.length) {
+            const results = await Promise.allSettled(staleWrites);
+            this.log(`Recuperate ${results.filter(r => r.status === 'fulfilled').length} email rimaste in elaborazione.`, 'warning');
+          }
+
+          // Accoda i promemoria dovuti e gestisce la chiusura dei turni.
+          await reconcileScheduledOpenDayEmails();
+
+          const today = new Date().toLocaleDateString('it-IT');
+          let quotaSnap = null;
+          let quotaReadOk = false;
+          try {
+            quotaSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'email_quota'));
+            quotaReadOk = true;
+          } catch (e) {
+            this.log(`Lettura quota non riuscita: ${e.message || e}. Invii sospesi per sicurezza.`, 'error');
+          }
+          if (!quotaReadOk) return;
+          if (quotaSnap && quotaSnap.exists()) {
+            state.emailQuota = quotaSnap.data();
+            if (state.emailQuota.date !== today) state.emailQuota = { date: today, count: 0 };
+          } else {
+            state.emailQuota = { date: today, count: 0 };
+          }
+
+          const q1 = [], q2 = [], q3 = [];
+          for (const r of (state.registrations || [])) {
+            if (String(r.passSentDate || '').includes('IN_CODA')) q1.push({ reg: r, type: 'pass', url: REGISTRATION_PARCHMENT_URL });
+            if (String(r.promemoriaSentDate || '').includes('IN_CODA')) q2.push({ reg: r, type: 'promemoria', url: MAIL_QUOTA_SCRIPT_URL });
+            if (String(r.presenzaSentDate || '').includes('IN_CODA')) q3.push({ reg: r, type: 'presenza', url: ATTESTATO_ENTRATA_URL });
+            if (String(r.pergamenaSentDate || '').includes('IN_CODA')) q3.push({ reg: r, type: 'pergamena', url: ATTESTATO_USCITA_URL });
+          }
+
+          this.updateDashboard(q1.length, q2.length, q3.length);
+          if (q1.length + q2.length + q3.length === 0) return;
+
+          if (this.serverQuotaBlockedDate === today) {
+            this.log('Quota effettiva Google esaurita per oggi: la coda resta sospesa fino al prossimo giorno.', 'warning');
+            return;
+          }
+
+          const availableQuota = this.maxDaily - Number(state.emailQuota.count || 0);
+          if (availableQuota <= 0) {
+            this.log('Limite giornaliero configurato raggiunto: code sospese fino al prossimo giorno.', 'error');
+            const indicator = document.getElementById('engineStatusIndicator');
+            if (indicator) {
+              indicator.className = 'flex items-center gap-1.5 bg-rose-50 text-rose-700 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase border border-rose-200';
+              indicator.innerHTML = '<div class="w-2 h-2 rounded-full bg-rose-500"></div> Bloccato';
+            }
+            return;
+          }
+
+          const permittedBatchSize = Math.max(0, Math.min(this.batchSize, availableQuota));
+          let batchToProcess = [];
+          if (q1.length > 0) {
+            batchToProcess = q1.slice(0, permittedBatchSize);
+            this.log(`Elaborazione pergamene/pass Q1: ${batchToProcess.length} email.`);
+          } else if (q2.length > 0) {
+            batchToProcess = q2.slice(0, permittedBatchSize);
+            this.log(`Elaborazione email ordinarie Q2: ${batchToProcess.length} email.`);
+          } else if (q3.length > 0) {
+            batchToProcess = q3.slice(0, permittedBatchSize);
+            this.log(`Elaborazione comunicazioni Q3: ${batchToProcess.length} email.`);
+          }
+
+          for (const item of batchToProcess) {
+            await this.dispatchEmail(item);
+            if (this.serverQuotaBlockedDate === today) break;
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        } catch (e) {
+          this.log(`Errore nel ciclo della coda: ${e.message || e}`, 'error');
+          console.error('OpenDay SmartEmailEngine.processQueues', e);
+        } finally {
           this.isProcessing = false;
-          return;
         }
-
-        let batchToProcess = [];
-        
-        if (q1.length > 0) {
-           batchToProcess = q1.slice(0, this.batchSize);
-           this.log(`Elaborazione Batch Q1: ${batchToProcess.length} elementi.`);
-        } 
-        else if (q2.length > 0 && availableQuota > 0) {
-           batchToProcess = q2.slice(0, this.batchSize);
-           this.log(`Elaborazione Batch Q2: ${batchToProcess.length} elementi.`);
-        } 
-        else if (q3.length > 0 && availableQuota > 0) {
-           batchToProcess = q3.slice(0, this.batchSize);
-           this.log(`Elaborazione Batch Q3: ${batchToProcess.length} elementi.`);
-        } 
-        else {
-           if(q2.length > 0 || q3.length > 0) {
-             this.log(`Invio sospeso per preservare la riserva prenotazioni (${availableQuota} rimasti).`, "warning");
-           }
-        }
-
-        for (const item of batchToProcess) {
-           await this.dispatchEmail(item);
-        }
-
-        this.isProcessing = false;
       },
 
       async dispatchEmail(item) {
-        const fieldMap = { 'pass':'passSentDate', 'promemoria':'promemoriaSentDate', 'presenza':'presenzaSentDate', 'pergamena':'pergamenaSentDate' };
+        const fieldMap = { pass: 'passSentDate', promemoria: 'promemoriaSentDate', presenza: 'presenzaSentDate', pergamena: 'pergamenaSentDate' };
+        const field = fieldMap[item.type];
+        if (!field) return false;
         try {
           const leaseOk = await acquireOpenDayEmailDeliveryLease(item.reg.code, item.type);
           if (!leaseOk) {
-            this.log(`Invio [${item.type.toUpperCase()}] ${item.reg.code} gia preso in carico da un altro dispositivo.`, "warning");
-            return;
-          }
-          this.log(`Invio [${item.type.toUpperCase()}] per ${item.reg.code} -> ${item.reg.email}...`);
-          
-          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', item.reg.code), { [fieldMap[item.type]]: 'ELABORAZIONE' });
-          
-          let payload = {...item.reg, type: item.type};
-
-          if (item.type === 'pass' || item.type === 'promemoria' || item.type === 'recupero') {
-             this.log("Generazione PDF di alta qualità in corso...");
-             const pdfBase64 = await window.generateReceiptPDF(item.reg, item.reg.code);
-             payload.pdfBase64 = pdfBase64;
+            this.log(`Email ${item.type.toUpperCase()} ${item.reg.code}: presa in carico da un altro dispositivo o lock non disponibile.`, 'warning');
+            return false;
           }
 
-          // Attende almeno il completamento della richiesta HTTP del browser.
-          // Con no-cors la risposta Google resta opaca, ma un errore di rete non viene più ignorato.
-          await window.inviaEmailScript(item.url, payload);
-          
-          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', item.reg.code), { [fieldMap[item.type]]: new Date().toLocaleString('it-IT') });
-          
-          state.emailQuota.count++;
-          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'email_quota'), { date: state.emailQuota.date, count: state.emailQuota.count });
-          
-          this.log(`Completato ${item.reg.code}. Quota residua: ${this.maxDaily - state.emailQuota.count}`, "success");
+          this.log(`Invio ${item.type.toUpperCase()} per ${item.reg.code} → ${item.reg.email}...`);
+          const processingAt = Date.now();
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', item.reg.code), {
+            [field]: 'ELABORAZIONE', emailProcessingAt: processingAt, lastEmailError: null
+          });
+
+          const payload = { ...item.reg, type: item.type };
+          if (item.type === 'pass' || item.type === 'promemoria') {
+            this.log('Generazione PDF prenotazione...');
+            payload.pdfBase64 = await window.generateReceiptPDF(item.reg, item.reg.code);
+          }
+
+          // L'endpoint delle email ordinarie conferma l'invio dopo MailApp.sendEmail.
+          const result = await window.inviaEmailScript(item.url, payload);
+          if (item.url === MAIL_QUOTA_SCRIPT_URL && (!result || result.ok !== true)) {
+            throw new Error(result?.message || 'Google Apps Script non ha confermato l’invio.');
+          }
+          const sentAt = new Date().toLocaleString('it-IT');
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', item.reg.code), {
+            [field]: sentAt, emailProcessingAt: null, lastEmailError: null, lastEmailSentAt: Date.now()
+          });
+          const localReg = (state.registrations || []).find(r => r.code === item.reg.code);
+          if (localReg) {
+            localReg[field] = sentAt;
+            localReg.emailProcessingAt = null;
+            localReg.lastEmailError = null;
+          }
+
+          this.log(`Invio accettato per ${item.reg.email}. Quota conteggiata: ${state.emailQuota.count}/${this.maxDaily}.`, 'success');
           this.updateDashboard();
-        } catch(e) {
-          this.log(`Errore per ${item.reg.code}. Rimetto in coda.`, "error");
-          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', item.reg.code), { [fieldMap[item.type]]: 'IN_CODA_RETRY' });
+          return true;
+        } catch (e) {
+          const errorText = String(e.message || e);
+          const quotaError = /limite_giornaliero_1500|quota giornaliera google esaurita|quota.*1500|limit exceeded|service invoked too many times.*email/i.test(errorText);
+          if (quotaError) this.serverQuotaBlockedDate = new Date().toLocaleDateString('it-IT');
+          this.log(`Errore email ${item.reg.code}: ${errorText}. Reinserimento in coda.`, 'error');
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', item.reg.code), {
+            [field]: 'IN_CODA_RETRY', emailProcessingAt: null, lastEmailError: errorText.slice(0, 500)
+          }).catch(writeError => console.error('Impossibile ripristinare la coda email', writeError));
+          const localReg = (state.registrations || []).find(r => r.code === item.reg.code);
+          if (localReg) {
+            localReg[field] = 'IN_CODA_RETRY';
+            localReg.emailProcessingAt = null;
+            localReg.lastEmailError = errorText.slice(0, 500);
+          }
+          this.updateDashboard();
+          return false;
         }
       },
 
@@ -1175,46 +1302,190 @@
     };
     window.SmartEmailEngine = SmartEmailEngine;
 
+    async function sendPendingEmails() {
+      if (!state.isAdminAuthed) {
+        showToast('Accedi all’Area Docenti per elaborare la coda email.', 'error');
+        return;
+      }
+
+      // Le vecchie voci ELABORAZIONE senza timestamp richiedono una conferma:
+      // potrebbero essere già state inviate prima dell'interruzione.
+      const legacyStuck = (state.registrations || []).filter(r => {
+        const fields = [r.passSentDate, r.promemoriaSentDate, r.presenzaSentDate, r.pergamenaSentDate];
+        return fields.some(v => String(v || '').includes('ELABORAZIONE')) && !Number(r.emailProcessingAt || 0);
+      });
+      if (legacyStuck.length) {
+        const ok = confirm(
+          `Sono presenti ${legacyStuck.length} prenotazioni con email in stato ELABORAZIONE senza orario di avvio. ` +
+          'Non è possibile sapere dal solo HTML se Google le abbia già spedite. Reinserirle in coda può causare un duplicato. Vuoi procedere?'
+        );
+        if (ok) {
+          for (const reg of legacyStuck) {
+            const updates = { emailProcessingAt: null };
+            if (String(reg.passSentDate || '').includes('ELABORAZIONE')) updates.passSentDate = 'IN_CODA_RETRY';
+            if (String(reg.promemoriaSentDate || '').includes('ELABORAZIONE')) updates.promemoriaSentDate = 'IN_CODA_RETRY';
+            if (String(reg.presenzaSentDate || '').includes('ELABORAZIONE')) updates.presenzaSentDate = 'IN_CODA_RETRY';
+            if (String(reg.pergamenaSentDate || '').includes('ELABORAZIONE')) updates.pergamenaSentDate = 'IN_CODA_RETRY';
+            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', reg.code || reg.id), updates);
+          }
+        }
+      }
+
+      const queuedFields = ['passSentDate', 'promemoriaSentDate', 'presenzaSentDate', 'pergamenaSentDate'];
+      const queuedCount = () => (state.registrations || []).reduce((sum, reg) =>
+        sum + queuedFields.filter(field => String(reg[field] || '').includes('IN_CODA')).length, 0);
+      const queueSignature = () => (state.registrations || [])
+        .filter(reg => queuedFields.some(field => String(reg[field] || '').includes('IN_CODA')))
+        .map(reg => `${reg.code}:${reg.passSentDate || ''}:${reg.promemoriaSentDate || ''}:${reg.presenzaSentDate || ''}:${reg.pergamenaSentDate || ''}`)
+        .sort().join('|');
+
+      showToast('Avvio elaborazione di tutte le email in coda, nel rispetto del limite giornaliero di 1.500.', 'info');
+      const initialQueueSize = Math.max(queuedCount(), 1);
+      const maxRounds = Math.ceil(initialQueueSize / Math.max(1, window.SmartEmailEngine.batchSize)) + 12;
+      let previousSignature = '';
+      let unchangedRounds = 0;
+      let completedRounds = 0;
+
+      for (let round = 0; round < maxRounds; round++) {
+        await window.SmartEmailEngine.flushNow();
+        completedRounds++;
+        await new Promise(resolve => setTimeout(resolve, 250));
+
+        const remaining = queuedCount();
+        if (remaining === 0) break;
+
+        const today = new Date().toLocaleDateString('it-IT');
+        if (window.SmartEmailEngine.serverQuotaBlockedDate === today || Number(state.emailQuota.count || 0) >= window.SmartEmailEngine.maxDaily) break;
+
+        const signature = queueSignature();
+        unchangedRounds = signature === previousSignature ? unchangedRounds + 1 : 0;
+        previousSignature = signature;
+        if (unchangedRounds >= 4) {
+          window.SmartEmailEngine.log('Coda temporaneamente ferma: verificare lock, servizio Google o errori nel registro.', 'warning');
+          break;
+        }
+        if (completedRounds % 10 === 0) {
+          window.SmartEmailEngine.log(`Recupero manuale: ${remaining} email ancora in coda; quota ${state.emailQuota.count}/${window.SmartEmailEngine.maxDaily}.`);
+        }
+      }
+
+      const remaining = queuedCount();
+      window.SmartEmailEngine.updateDashboard();
+      if (remaining === 0) {
+        showToast('Coda email svuotata: tutti gli invii disponibili sono stati elaborati.', 'success');
+      } else if (Number(state.emailQuota.count || 0) >= window.SmartEmailEngine.maxDaily || window.SmartEmailEngine.serverQuotaBlockedDate === new Date().toLocaleDateString('it-IT')) {
+        showToast(`Quota giornaliera di 1.500 raggiunta: ${remaining} email restano in coda e potranno ripartire al rinnovo della quota.`, 'warning');
+      } else {
+        showToast(`Elaborazione interrotta: ${remaining} email restano in coda. Controlla il registro del Motore E-mail.`, 'warning');
+      }
+    }
+    window.sendPendingEmails = sendPendingEmails;
+
+
     // --- GESTIONE QUOTA EMAIL GIORNALIERA ---
     async function checkAndIncrementQuota() {
-      const today = new Date().toLocaleDateString('it-IT');
-      const quotaRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'email_quota');
-      
       try {
-        const snap = await getDoc(quotaRef);
-        let data = snap.exists() ? snap.data() : { date: today, count: 0 };
-        
-        if (data.date !== today) {
-          data = { date: today, count: 0 };
-        }
-        
-        if (data.count >= 1500) { 
-          return false; 
-        }
-        
-        data.count++;
-        await setDoc(quotaRef, data);
-        return true; 
+        const reservation = await reserveOpenDayEmailQuotaSlot();
+        return reservation.reserved;
       } catch (err) {
         console.error("Quota error", err);
-        return true; 
+        return false;
       }
     }
     window.checkAndIncrementQuota = checkAndIncrementQuota;
 
     async function inviaEmailScript(url, payload) {
-      // Compatibilità con gli Apps Script storici: alcuni leggono code/dateStr/studyPath,
-      // altri codice_prenotazione/data/attivita.
-      const normalizedPayload = { ...(payload || {}) };
-      if (!normalizedPayload.codice_prenotazione && normalizedPayload.code) normalizedPayload.codice_prenotazione = normalizedPayload.code;
-      if (!normalizedPayload.data && normalizedPayload.dateStr) normalizedPayload.data = normalizedPayload.dateStr;
-      if (!normalizedPayload.attivita && normalizedPayload.studyPath) normalizedPayload.attivita = `Open Day - ${normalizedPayload.studyPath}`;
-      return fetch(url, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(normalizedPayload)
-      });
+      // Tutti gli invii, inclusi recuperi, lista d'attesa e annullamenti, consumano
+      // la stessa quota giornaliera. La prenotazione transazionale evita sforamenti.
+      const quotaReservation = await reserveOpenDayEmailQuotaSlot();
+      if (!quotaReservation.reserved) {
+        if (window.SmartEmailEngine) window.SmartEmailEngine.serverQuotaBlockedDate = quotaReservation.date;
+        throw new Error('LIMITE_GIORNALIERO_1500_RAGGIUNTA: email lasciata in coda.');
+      }
+
+      try {
+        // Normalizza i nomi dei campi usati dalle versioni storiche di Code.gs.
+        const normalizedPayload = { ...(payload || {}) };
+        if (!normalizedPayload.codice_prenotazione && normalizedPayload.code) normalizedPayload.codice_prenotazione = normalizedPayload.code;
+        if (!normalizedPayload.data && normalizedPayload.dateStr) normalizedPayload.data = normalizedPayload.dateStr;
+        if (!normalizedPayload.attivita && normalizedPayload.studyPath) normalizedPayload.attivita = `Open Day - ${normalizedPayload.studyPath}`;
+
+        // Lo script per le email ordinarie conferma l'invio tramite postMessage.
+        if (url === MAIL_QUOTA_SCRIPT_URL) {
+          const token = `mail_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
+          normalizedPayload.requestId = normalizedPayload.requestId || token;
+          const frame = document.createElement('iframe');
+          frame.name = `openday_mail_${token}`;
+          frame.id = frame.name;
+          frame.title = 'Risposta servizio email';
+          frame.style.display = 'none';
+          document.body.appendChild(frame);
+
+          const form = document.createElement('form');
+          form.method = 'POST';
+          form.action = url;
+          form.target = frame.name;
+          form.acceptCharset = 'UTF-8';
+          form.style.display = 'none';
+          const input = document.createElement('input');
+          input.type = 'hidden';
+          input.name = 'payload';
+          input.value = JSON.stringify(normalizedPayload);
+          form.appendChild(input);
+          document.body.appendChild(form);
+
+          return await new Promise((resolve, reject) => {
+            let settled = false;
+            const cleanup = () => {
+              window.removeEventListener('message', onMessage);
+              form.remove();
+              frame.remove();
+              clearTimeout(timeoutId);
+            };
+            const finish = (fn, value) => {
+              if (settled) return;
+              settled = true;
+              cleanup();
+              fn(value);
+            };
+            const onMessage = event => {
+              if (event.source !== frame.contentWindow) return;
+              const data = event.data || {};
+              if (data.source !== 'OPEN_DAY_MAIL' || data.token !== token) return;
+              if (data.ok === true) finish(resolve, data);
+              else finish(reject, new Error(data.message || 'Invio rifiutato da Google Apps Script.'));
+            };
+            const timeoutId = setTimeout(() => finish(reject, new Error('Nessuna conferma da Google Apps Script entro 60 secondi. Controlla Esecuzioni in Apps Script prima di riprovare.')), 60000);
+            window.addEventListener('message', onMessage);
+            try { form.submit(); }
+            catch (e) { finish(reject, e); }
+          });
+        }
+
+        // Gli endpoint dedicati a pergamene/annullamenti mantengono il protocollo
+        // compatibile già utilizzato dal progetto.
+        return await fetch(url, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(normalizedPayload)
+        });
+      } catch (e) {
+        const errorText = String(e.message || e);
+        const quotaError = /quota giornaliera google esaurita|quota.*1500|limit exceeded|service invoked too many times.*email/i.test(errorText);
+        const ambiguousDelivery = /nessuna conferma|timeout|failed to fetch|networkerror|network request failed/i.test(errorText);
+        if (quotaError && window.SmartEmailEngine) {
+          window.SmartEmailEngine.serverQuotaBlockedDate = new Date().toLocaleDateString('it-IT');
+        }
+        // Un timeout può verificarsi dopo la spedizione: in quel caso non liberiamo
+        // lo slot, per evitare un reinvio che porti oltre la quota Google effettiva.
+        if (!ambiguousDelivery && !quotaError) {
+          await releaseOpenDayEmailQuotaSlot(quotaReservation.date);
+        } else if (quotaError) {
+          await releaseOpenDayEmailQuotaSlot(quotaReservation.date);
+        }
+        throw e;
+      }
     }
     window.inviaEmailScript = inviaEmailScript;
 
@@ -1341,7 +1612,7 @@
     async function sendOpenDayWaitlistEmail(reg, position) {
       try {
         const pdfBase64 = await generateWaitlistReceiptPDF(reg, position);
-        await window.inviaEmailScript(CONFIRM_SCRIPT_URL, {
+        await window.inviaEmailScript(REGISTRATION_PARCHMENT_URL, {
           ...reg,
           pdfBase64,
           type: 'iscrizione_con_riserva',
@@ -1363,7 +1634,7 @@
     async function sendOpenDayPromotionEmail(reg) {
       try {
         const pdfBase64 = await window.generateReceiptPDF(reg, reg.code);
-        await window.inviaEmailScript(CONFIRM_SCRIPT_URL, {
+        await window.inviaEmailScript(REGISTRATION_PARCHMENT_URL, {
           ...reg,
           pdfBase64,
           type: 'ammesso_da_scorrimento',
@@ -1969,7 +2240,7 @@ Preferenza: ${openDayLiceoPreferenceLabel(regData)}` : regData.studyPath; docume
       const btn = document.getElementById('btnSubmitRecovery'); btn.innerHTML = `<span class="animate-pulse">Invio in corso...</span>`; btn.disabled = true;
       try {
         if (isWaitlistRegistration(reg)) { const pos = await queuePositionOpenDay(reg); await sendOpenDayWaitlistEmail(reg, pos); const msg = document.getElementById('recoveryModalMessage'); if (msg) msg.textContent = `Ricevuta di riserva reinviata. Posizione indicativa attuale: ${pos || 'in aggiornamento'}.`; }
-        else { const pdfBase64 = await window.generateReceiptPDF(reg, reg.code); await window.inviaEmailScript(CONFIRM_SCRIPT_URL, { ...reg, pdfBase64, type: 'recupero' }); const msg = document.getElementById('recoveryModalMessage'); if (msg) msg.textContent = 'Il pass di prenotazione è stato reinviato via e-mail.'; }
+        else { const pdfBase64 = await window.generateReceiptPDF(reg, reg.code); await window.inviaEmailScript(REGISTRATION_PARCHMENT_URL, { ...reg, pdfBase64, type: 'recupero' }); const msg = document.getElementById('recoveryModalMessage'); if (msg) msg.textContent = 'Il pass di prenotazione è stato reinviato via e-mail.'; }
         document.getElementById('recoveryModalFormView').classList.add('hidden'); document.getElementById('recoveryModalSuccessView').classList.remove('hidden');
       } catch(err) { showToast("Errore durante l'invio.", "error"); }
       btn.innerHTML = `Invia Conferma via Email`; btn.disabled = false;
@@ -2179,7 +2450,7 @@ Preferenza: ${openDayLiceoPreferenceLabel(regData)}` : regData.studyPath; docume
     async function triggerEmailQueue(code, type) {
       const fieldMap = { 'pass':'passSentDate', 'promemoria':'promemoriaSentDate', 'presenza':'presenzaSentDate', 'pergamena':'pergamenaSentDate' };
       const priority = (type === 'pass') ? 'Q1' : (type === 'promemoria' ? 'Q2' : 'Q3');
-      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', code), { [fieldMap[type]]: `IN_CODA_${priority}` });
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', code), { [fieldMap[type]]: `IN_CODA_${priority}`, manualEmailRequestAt: Date.now() });
       showToast("Email accodata. Invio in elaborazione...", "info");
       await window.SmartEmailEngine.flushNow();
     }
