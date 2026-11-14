@@ -514,9 +514,9 @@
             <h4 class="font-outfit font-black text-indigo-950 text-lg flex items-center gap-2"><i data-lucide="mail-warning" class="text-indigo-600 w-5 h-5"></i> Gestione E-mail & Quota</h4>
             
             <div class="space-y-2 border-b pb-4">
-              <div class="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
+              <div class="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-1500">
                 <span class="text-xs font-black text-slate-600 uppercase">E-mail inviate oggi:</span>
-                <span class="text-base font-black text-indigo-700" id="adminEmailQuotaText">0 / 100</span>
+                <span class="text-base font-black text-indigo-700" id="adminEmailQuotaText">0 / 1500</span>
               </div>
               <p class="text-[10px] text-slate-500 font-bold pt-1 leading-relaxed">Google Apps Script impone un limite gratuito di 100 email al giorno. Il sistema sospenderà in automatico gli invii se si avvicina al limite per prevenire blocchi.</p>
             </div>
@@ -1005,7 +1005,7 @@
     window.reconcileScheduledOpenDayEmails = reconcileScheduledOpenDayEmails;
 
     const SmartEmailEngine = {
-      maxDaily: 100,
+      maxDaily: 1500,
       reserveQ1: 40, 
       safeLimit: 90, 
       batchSize: 2,  
