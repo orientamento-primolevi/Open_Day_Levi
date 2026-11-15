@@ -810,7 +810,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, collection, query, where, doc, setDoc, deleteDoc, updateDoc, onSnapshot, getDocs, getDoc, runTransaction, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getFirestore, collection, query, where, doc, setDoc, deleteDoc, updateDoc, onSnapshot, getDocs, getDoc, runTransaction, writeBatch, increment } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDAQB-W-QTV1thVoCCifbdTFbpaYmAM4eQ",
@@ -889,6 +889,15 @@
       dates: [], registrations: [], currentBooking: null, devices: [], emailQuota: { count: 0, date: '' } 
     };
     let openDayRegistrationsRealtimeReady = false;
+    let openDayDatesRealtimeReady = false;
+    let openDayRealtimeInitialized = false;
+    let openDayOperationalListenersReady = false;
+    let openDayRegistrationUnsubscribes = [];
+    let openDayRegistrationListenerKey = '';
+    let openDayRegistrationListenerGeneration = 0;
+    // Il browser pubblico ascolta soltanto le iscrizioni dei turni ancora prenotabili.
+    // I registri completi restano disponibili ai docenti e allo scanner.
+    const OPEN_DAY_REGISTRATIONS_QUERY_BATCH = 30;
 
     // Fissate le istanze dei grafici come variabili globali di window per evitare errori di scope in transpilation/compilation
     window.chartIndirizziInstance = null;
@@ -1272,7 +1281,9 @@
         if (this.timerId) clearInterval(this.timerId);
         this.firestoreQuotaPaused = false;
         this.log('Motore e-mail avviato: coda condivisa e invio sequenziale attivi (controllo ogni 60 secondi).');
-        this.processQueues().catch(e => this.log(`Errore ciclo iniziale: ${e.message || e}`, 'error'));
+        // Evita una seconda lettura completa mentre il listener iniziale e' in caricamento.
+        if (openDayRegistrationsRealtimeReady && openDayDatesRealtimeReady)
+          this.processQueues().catch(e => this.log(`Errore ciclo iniziale: ${e.message || e}`, 'error'));
         this.timerId = setInterval(() => {
           this.processQueues().catch(e => this.log(`Errore ciclo automatico: ${e.message || e}`, 'error'));
         }, this.intervalMs);
@@ -1438,6 +1449,13 @@
 
       async processQueues() {
         if (this.isProcessing) return false;
+        // Nessuna transazione di lock ogni minuto quando non ci sono invii, scadenze
+        // o elaborazioni interrotte da verificare. Il listener realtime risveglia
+        // naturalmente il controllo quando arriva una nuova prenotazione.
+        if (!openDayEmailWorkNeeded()) {
+          this.updateDashboard(q1Count(), q2Count(), q3Count());
+          return true;
+        }
         this.firestoreQuotaPaused = false;
         this.isProcessing = true;
         let leaseAcquired = false;
@@ -1455,14 +1473,10 @@
           if (leaseAcquired) this.startLeaseHeartbeat();
           else this.queueLeaseLost = false;
 
+          // preparePendingQueue() accoda già le comunicazioni programmate:
+          // eseguire una seconda riconciliazione produceva lavoro duplicato.
           const queue = await this.preparePendingQueue();
-          // Ricalcola le scadenze dei promemoria ad ogni ciclo automatico:
-          // quando mancano i giorni configurati, li inserisce nella stessa coda.
-          try { await reconcileScheduledOpenDayEmails(); } catch (reminderError) { this.log(`Controllo promemoria rinviato: ${reminderError.message || reminderError}`, 'warning'); }
-          const scheduledQueue = this.collectQueueItems();
-          if (!scheduledQueue.length) return true;
-          // Usa la coda aggiornata dopo l'accodamento dei promemoria.
-          queue.splice(0, queue.length, ...scheduledQueue);
+          if (!queue.length) return true;
           this.log(`Coda condivisa: avvio invio sequenziale di tutte le ${queue.length} richieste in attesa.`);
           let attempted = 0;
           for (const queuedItem of queue) {
@@ -1529,7 +1543,6 @@
           // preparePendingQueue() dopo ogni email, rileggendo tutta la collezione
           // N volte e causando un carico quadratico su Firestore.
           await this.preparePendingQueue();
-          try { await reconcileScheduledOpenDayEmails(); } catch (reminderError) { this.log(`Controllo promemoria rinviato: ${reminderError.message || reminderError}`, 'warning'); }
 
           // Le vecchie voci ELABORAZIONE senza timestamp non sono verificabili automaticamente.
           const legacyStuck = (state.registrations || []).filter(r => {
@@ -1759,6 +1772,37 @@
       }
     };
     window.SmartEmailEngine = SmartEmailEngine;
+
+    function openDayEmailWorkNeeded() {
+      // Se i listener devono ancora arrivare, lascia al motore la possibilità
+      // di fare il caricamento iniziale (una volta sola, non ad ogni minuto).
+      if (!openDayRegistrationsRealtimeReady || !openDayDatesRealtimeReady) return true;
+      const now = Date.now();
+      const days = Number(window.promemoriaDays ?? 7);
+      const reminderDays = Number.isFinite(days) && days > 0 ? days : 7;
+      for (const reg of (state.registrations || [])) {
+        for (const field of ['passSentDate','promemoriaSentDate','presenzaSentDate','pergamenaSentDate','cancellationEmailStatus']) {
+          const value = String(reg[field] || '');
+          if (value.includes('IN_CODA')) return true;
+          if (value.includes('ELABORAZIONE') && Number(reg.emailProcessingAt || 0) && now - Number(reg.emailProcessingAt) > 180000) return true;
+        }
+        if (isWaitlistRegistration(reg) || String(reg.type || '').toLowerCase() === 'cancellazione' || normalizeWaitlistText(reg.status) === 'annullato') continue;
+        if (reg.status === 'Ammesso' && !reg.pergamenaSentDate) {
+          const end = openDayEventEndPlusFive(reg);
+          if (end && now >= end) return true;
+        }
+        if (reg.promemoriaSentDate) continue;
+        const slot = state.dates.find(d => d.id === reg.dateId);
+        if (!slot?.date) continue;
+        const startTime = String(slot.timeSlot || '00:00').includes('-')
+          ? String(slot.timeSlot).split('-')[0].trim()
+          : String(slot.timeSlot || '00:00').trim();
+        const start = parseOpenDayLocalDate(slot.date, startTime);
+        const remainingMs = start ? start.getTime() - now : 0;
+        if (remainingMs > 0 && remainingMs <= reminderDays * 86400000) return true;
+      }
+      return false;
+    }
 
     function q1Count() { return (state.registrations || []).filter(r => String(r.passSentDate || '').includes('IN_CODA')).length; }
     function q2Count() { return (state.registrations || []).filter(r => String(r.promemoriaSentDate || '').includes('IN_CODA')).length; }
@@ -2356,6 +2400,8 @@
           window.updateStatistics();
           window.renderRegistrations(); 
           window.renderAdminDatesList(); 
+          ensureOpenDayOperationalListeners();
+          bindOpenDayRegistrationListener();
           window.SmartEmailEngine.start();
         }
         else document.getElementById('sectionLogin').classList.remove('hidden'); 
@@ -2365,7 +2411,14 @@
     }
     window.navigateTo = navigateTo;
 
-    function logoutAdmin() { state.isAdminAuthed = false; window.navigateTo('home'); showToast("Uscita effettuata. Il motore e-mail resta attivo in sicurezza.", "info"); }
+    function logoutAdmin() {
+      state.isAdminAuthed = false;
+      window.navigateTo('home');
+      // Il motore già avviato resta attivo come nella versione originale:
+      // conserva il registro completo finché il worker rimane operativo.
+      bindOpenDayRegistrationListener();
+      showToast("Uscita effettuata. Il motore e-mail resta attivo in sicurezza.", "info");
+    }
     window.logoutAdmin = logoutAdmin;
 
     function scrollToSection(id) { window.navigateTo('home'); setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' }), 150); }
@@ -2386,6 +2439,115 @@
     function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
     window.closeModal = closeModal;
 
+    function isOpenDayScannerView() {
+      return new URLSearchParams(window.location.search).get('scanner') === 'true';
+    }
+
+    function openDayNeedsFullRegister() {
+      // Se l'Area Docenti ha avviato il worker, esso deve continuare a vedere
+      // l'intera coda anche dopo un'uscita dalla dashboard.
+      return state.isAdminAuthed || isOpenDayScannerView() || Boolean(window.SmartEmailEngine?.timerId);
+    }
+
+    function openDayPublicTurnIds() {
+      // Solo i turni prenotabili: il registro storico non viene scaricato
+      // su ogni browser di una famiglia, ma rimane completo in Area Docenti.
+      return [...new Set((state.dates || [])
+        .filter(isOpenDayDateBookable).map(x => String(x.id || '')).filter(Boolean))].sort();
+    }
+
+    function publishOpenDayRegistrations(rows) {
+      const wasReady = openDayRegistrationsRealtimeReady;
+      state.registrations = rows;
+      openDayRegistrationsRealtimeReady = true;
+      // Primo controllo immediato quando il listener completo diventa pronto.
+      if (!wasReady && window.SmartEmailEngine?.timerId)
+        queueMicrotask(() => window.SmartEmailEngine.processQueues().catch(error => console.warn('Controllo coda email', error)));
+      window.renderHomeDates();
+      if (state.currentView === 'admin') {
+        populateFilters(); window.renderRegistrations(); window.updateStatistics();
+        window.renderAdminDatesList(); renderOpenDayWaitlistAdmin();
+      }
+      scheduleOpenDayWaitlistReconcile();
+    }
+
+    function bindOpenDayRegistrationListener() {
+      if (!state.user || !openDayDatesRealtimeReady) return;
+      const full = openDayNeedsFullRegister();
+      const ids = full ? [] : openDayPublicTurnIds();
+      const key = full ? 'full' : `public:${ids.join('|')}`;
+      if (openDayRegistrationListenerKey === key) return;
+      openDayRegistrationListenerKey = key;
+      const generation = ++openDayRegistrationListenerGeneration;
+      for (const unsubscribe of openDayRegistrationUnsubscribes) unsubscribe();
+      openDayRegistrationUnsubscribes = [];
+      openDayRegistrationsRealtimeReady = false;
+      const ref = collection(db, 'artifacts', appId, 'public', 'data', 'registrations');
+      const handleError = error => {
+        if (generation !== openDayRegistrationListenerGeneration) return;
+        console.error('Iscrizioni Firestore', error);
+        setOpenDayBackendAlert(openDayErrorDescription(error, 'Caricamento prenotazioni'));
+      };
+      const normalize = snapshot => snapshot.docs.map(d => {
+        const raw = { id: d.id, ...d.data() };
+        return { ...raw, studyPath: canonicalOpenDayStudyPath(raw.studyPath) };
+      });
+      if (full) {
+        openDayRegistrationUnsubscribes.push(onSnapshot(ref, snapshot => {
+          if (generation !== openDayRegistrationListenerGeneration) return;
+          publishOpenDayRegistrations(normalize(snapshot));
+        }, handleError));
+        return;
+      }
+      if (!ids.length) {
+        publishOpenDayRegistrations([]);
+        return;
+      }
+      const slices = [];
+      for (let i = 0; i < ids.length; i += OPEN_DAY_REGISTRATIONS_QUERY_BATCH)
+        slices.push(ids.slice(i, i + OPEN_DAY_REGISTRATIONS_QUERY_BATCH));
+      const chunks = new Map();
+      for (let i = 0; i < slices.length; i++) {
+        const chunkId = i;
+        const q = query(ref, where('dateId', 'in', slices[i]));
+        openDayRegistrationUnsubscribes.push(onSnapshot(q, snapshot => {
+          if (generation !== openDayRegistrationListenerGeneration) return;
+          chunks.set(chunkId, normalize(snapshot));
+          // Non mostrare capienze parziali: attendi la prima risposta di ogni lotto.
+          if (chunks.size !== slices.length) return;
+          const unique = new Map();
+          for (const group of chunks.values()) for (const reg of group) unique.set(reg.id, reg);
+          publishOpenDayRegistrations([...unique.values()]);
+        }, handleError));
+      }
+    }
+
+    function ensureOpenDayOperationalListeners() {
+      if (!state.user || openDayOperationalListenersReady || !openDayNeedsFullRegister()) return;
+      openDayOperationalListenersReady = true;
+      // Scanner, contatore quota e configurazione promemoria sono dati di servizio:
+      // non devono essere letti da ogni visitatore della pagina pubblica.
+      onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'scanners'), snapshot => {
+        state.devices = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        if (state.currentView === 'admin') window.renderConnectedDevices();
+      }, error => console.warn('Scanner Firestore', error));
+      onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'email_quota'), snapshot => {
+        if (!snapshot.exists()) return;
+        const today = new Date().toLocaleDateString('it-IT');
+        const data = snapshot.data();
+        state.emailQuota = data.date === today ? data : { date: today, count: 0 };
+        if (state.currentView === 'admin') window.SmartEmailEngine.updateDashboard();
+      }, error => console.warn('Contatore e-mail Firestore', error));
+      getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'promemoria'))
+        .then(snapshot => {
+          if (!snapshot.exists()) return;
+          const days = snapshot.data().days || 7;
+          const input = document.getElementById('settingsPromemoriaDays');
+          if (input) input.value = days;
+          window.promemoriaDays = days;
+        }).catch(error => console.warn('Configurazione promemoria Firestore', error));
+    }
+
     async function startApp() {
       try { await signInAnonymously(auth); }
       catch(e) {
@@ -2394,59 +2556,40 @@
       }
       onAuthStateChanged(auth, u => {
         state.user = u;
-        if(u) {
+        if (u) {
           setupRealtimeListeners();
-          // In modalita Scanner il motore resta continuo anche senza area Docenti.
-          // Sulla home pubblica non elaboriamo code amministrative.
-          if (window.location.search.includes('scanner=true')) window.SmartEmailEngine.start();
+          if (openDayNeedsFullRegister()) {
+            ensureOpenDayOperationalListeners();
+            bindOpenDayRegistrationListener();
+          }
+          if (isOpenDayScannerView() && !window.SmartEmailEngine.timerId) window.SmartEmailEngine.start();
         }
       });
-      if (window.location.search.includes('scanner=true')) window.openCompanionScannerMode();
+      if (isOpenDayScannerView()) window.openCompanionScannerMode();
     }
 
     function setupRealtimeListeners() {
-      onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'dates'), s => {
-        state.dates = []; 
-        // Firestore e l'unica fonte del calendario: NON ripubblicare turni vecchi
-        // quando un amministratore ha eliminato tutte le date.
-        s.forEach(d => { const raw = {id: d.id, ...d.data()}; state.dates.push({...raw, studyPath: canonicalOpenDayStudyPath(raw.studyPath)}); });
+      if (openDayRealtimeInitialized) return;
+      openDayRealtimeInitialized = true;
+      onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'dates'), snapshot => {
+        state.dates = snapshot.docs.map(d => {
+          const raw = { id: d.id, ...d.data() };
+          return { ...raw, studyPath: canonicalOpenDayStudyPath(raw.studyPath) };
+        });
+        openDayDatesRealtimeReady = true;
+        // Un cambio di capienza/orario non riapre inutilmente gli ascoltatori;
+        // solo la lista dei turni prenotabili può modificare la query pubblica.
+        bindOpenDayRegistrationListener();
         window.renderHomeDates();
-        if (state.currentView === 'admin') { window.renderAdminDatesList(); window.renderRegistrations(); window.updateStatistics(); }
+        if (state.currentView === 'admin') {
+          window.renderAdminDatesList(); window.renderRegistrations(); window.updateStatistics();
+        }
         populateFilters();
         scheduleOpenDayWaitlistReconcile();
         setOpenDayBackendAlert('');
       }, error => {
         console.error('Calendario Firestore', error);
         setOpenDayBackendAlert(openDayErrorDescription(error, 'Caricamento calendario'));
-      });
-      onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'registrations'), s => {
-        state.registrations = []; 
-        s.forEach(d => { const raw = {id: d.id, ...d.data()}; state.registrations.push({...raw, studyPath: canonicalOpenDayStudyPath(raw.studyPath)}); });
-        openDayRegistrationsRealtimeReady = true;
-        window.renderHomeDates(); 
-        if (state.currentView === 'admin') { populateFilters(); window.renderRegistrations(); window.updateStatistics(); window.renderAdminDatesList(); renderOpenDayWaitlistAdmin(); }
-        scheduleOpenDayWaitlistReconcile();
-      }, error => {
-        console.error('Iscrizioni Firestore', error);
-        setOpenDayBackendAlert(openDayErrorDescription(error, 'Caricamento prenotazioni'));
-      });
-      onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'scanners'), s => {
-        state.devices = [];
-        s.forEach(d => state.devices.push({id: d.id, ...d.data()}));
-        if(state.currentView === 'admin') window.renderConnectedDevices();
-      });
-      onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'email_quota'), snap => {
-        if(snap.exists()) {
-          const today = new Date().toLocaleDateString('it-IT');
-          state.emailQuota = snap.data().date === today ? snap.data() : { date: today, count: 0 };
-          if(state.currentView === 'admin') window.SmartEmailEngine.updateDashboard();
-        }
-      });
-      getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'promemoria')).then(docSnap => {
-        if (docSnap.exists() && document.getElementById('settingsPromemoriaDays')) {
-          document.getElementById('settingsPromemoriaDays').value = docSnap.data().days || 7;
-          window.promemoriaDays = docSnap.data().days || 7;
-        }
       });
     }
 
@@ -2510,7 +2653,7 @@
               </div>
               <div class="flex flex-col sm:items-end gap-2 w-full sm:w-auto">
                 <span class="text-[9px] font-black border px-2 py-1.5 rounded-lg whitespace-normal text-center ${statusClass}">${statusLabel}</span>
-                <button onclick="${mustWait ? `window.startWaitlistProcess('${s.id}')` : `window.startBookingProcess('${s.id}')`}" class="w-full sm:w-auto px-4 py-2.5 ${mustWait?'bg-violet-600 hover:bg-violet-500 text-white':'bg-indigo-600 hover:bg-indigo-500 text-white'} rounded-lg uppercase font-black text-[10px] shadow-sm transition tracking-wider flex items-center justify-center gap-1 shrink-0">${mustWait ? `LISTA D'ATTESA${queue.length ? ` (${queue.length})` : ''}` : 'ISCRIVITI <i data-lucide="arrow-right" class="w-3 h-3"></i>'}</button>
+                <button ${!openDayRegistrationsRealtimeReady ? 'disabled title="Aggiornamento capienza in corso"' : `onclick="${mustWait ? `window.startWaitlistProcess('${s.id}')` : `window.startBookingProcess('${s.id}')`}"`} class="w-full sm:w-auto px-4 py-2.5 ${!openDayRegistrationsRealtimeReady ? 'bg-slate-300 text-slate-600 cursor-wait' : mustWait?'bg-violet-600 hover:bg-violet-500 text-white':'bg-indigo-600 hover:bg-indigo-500 text-white'} rounded-lg uppercase font-black text-[10px] shadow-sm transition tracking-wider flex items-center justify-center gap-1 shrink-0">${!openDayRegistrationsRealtimeReady ? 'VERIFICA POSTI…' : mustWait ? `LISTA D'ATTESA${queue.length ? ` (${queue.length})` : ''}` : 'ISCRIVITI <i data-lucide="arrow-right" class="w-3 h-3"></i>'}</button>
               </div>
             </div>`;
         }).join('');
@@ -2763,6 +2906,7 @@
       const targetSession = state.dates.find(x => x.id === document.getElementById('formEventId').value);
       const submitBtn = document.getElementById('btnSubmitBooking');
       if (!targetSession || !submitBtn) return showToast("Turno non disponibile.", "error");
+      if (!openDayRegistrationsRealtimeReady) return showToast("La disponibilità dei posti è in aggiornamento. Riprova tra poco.", "warning");
       if (submitBtn.dataset.saving === '1') return;
       submitBtn.dataset.saving = '1'; submitBtn.disabled = true;
       setProgress(0, "Controllo disponibilità e ordine di coda...");
@@ -2857,11 +3001,51 @@ Preferenza: ${openDayLiceoPreferenceLabel(regData)}` : regData.studyPath; docume
     }
     window.downloadTicketPDF = downloadTicketPDF;
 
+    async function locateOpenDayRegistration(code, cognome, nome, requireActive = false) {
+      const soughtCode = String(code || '').trim().toUpperCase();
+      const soughtSurname = normalizeWaitlistText(cognome);
+      const soughtName = normalizeWaitlistText(nome);
+      const matches = reg => {
+        if (!reg) return false;
+        if (requireActive && normalizeWaitlistText(reg.status) === 'annullato') return false;
+        return soughtCode
+          ? String(reg.code || reg.id || '').toUpperCase() === soughtCode
+          : normalizeWaitlistText(reg.cognome) === soughtSurname && normalizeWaitlistText(reg.nome) === soughtName;
+      };
+      const cached = (state.registrations || []).find(matches);
+      // Se siamo nell'Area Docenti/scanner, il listener contiene già tutto.
+      if (cached || (openDayNeedsFullRegister() && openDayRegistrationsRealtimeReady)) return cached || null;
+      const ref = collection(db, 'artifacts', appId, 'public', 'data', 'registrations');
+      if (soughtCode) {
+        const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', soughtCode));
+        if (snap.exists()) {
+          const found = { id: snap.id, ...snap.data() };
+          if (matches(found)) return found;
+        }
+        // Compatibilità con documenti storici non salvati con codice come ID.
+        const q = await getDocs(query(ref, where('code', '==', soughtCode)));
+        const found = q.docs.map(d => ({ id: d.id, ...d.data() })).find(matches);
+        if (found) return found;
+      } else {
+        // La ricerca per cognome è indicizzata senza bisogno di indici compositi.
+        const candidateSurname = toTitleCase(String(cognome || '').trim());
+        const q = await getDocs(query(ref, where('cognome', '==', candidateSurname)));
+        const found = q.docs.map(d => ({ id: d.id, ...d.data() })).find(matches);
+        if (found) return found;
+      }
+      // Rarissimo fallback per grafie/maiuscole legacy: prima il portale leggeva
+      // l'intera collezione; manteniamo la ricerca senza penalizzare ogni visita.
+      const all = await getDocs(ref);
+      return all.docs.map(d => ({ id: d.id, ...d.data() })).find(matches) || null;
+    }
+
     async function handleRecovery(e) {
       e.preventDefault();
       const codeTerm = document.getElementById('recoveryCode').value.trim(); const cogTerm = document.getElementById('recoveryCognome').value.trim().toLowerCase(); const nomTerm = document.getElementById('recoveryNome').value.trim().toLowerCase();
       if (!codeTerm && (!cogTerm || !nomTerm)) return showToast("Inserisci il codice oppure Nome e Cognome.", "error");
-      const reg = codeTerm ? state.registrations.find(x => x.code === codeTerm.toUpperCase()) : state.registrations.find(x => x.cognome.toLowerCase() === cogTerm && x.nome.toLowerCase() === nomTerm);
+      let reg;
+      try { reg = await locateOpenDayRegistration(codeTerm, cogTerm, nomTerm); }
+      catch(error) { return showToast(openDayErrorDescription(error, 'Ricerca prenotazione'), 'error'); }
       if(!reg) return showToast("Prenotazione non trovata.", "error");
       if (normalizeWaitlistText(reg.status) === 'annullato' || String(reg.type || '').toLowerCase() === 'cancellazione')
         return showToast("La prenotazione è annullata: non è possibile recuperare un pass valido.", "warning");
@@ -2885,9 +3069,9 @@ Preferenza: ${openDayLiceoPreferenceLabel(regData)}` : regData.studyPath; docume
       const cogTerm = document.getElementById('cancelCognome').value.trim().toLowerCase();
       const nomTerm = document.getElementById('cancelNome').value.trim().toLowerCase();
       if (!codeTerm && (!cogTerm || !nomTerm)) return showToast("Inserisci il codice oppure Nome e Cognome.", "error");
-      const reg = codeTerm
-        ? state.registrations.find(x => x.code === codeTerm.toUpperCase())
-        : state.registrations.find(x => normalizeWaitlistText(x.cognome) === cogTerm && normalizeWaitlistText(x.nome) === nomTerm && normalizeWaitlistText(x.status) !== 'annullato');
+      let reg;
+      try { reg = await locateOpenDayRegistration(codeTerm, cogTerm, nomTerm, !codeTerm); }
+      catch(error) { return showToast(openDayErrorDescription(error, 'Ricerca annullamento'), 'error'); }
       if (!reg) return showToast("Nessuna prenotazione trovata.", "error");
       if (normalizeWaitlistText(reg.status) === 'annullato' || String(reg.type || '').toLowerCase() === 'cancellazione')
         return showToast("Questa prenotazione risulta già annullata.", "warning");
@@ -3601,10 +3785,9 @@ Preferenza: ${openDayLiceoPreferenceLabel(regData)}` : regData.studyPath; docume
             if (reg && reg.type !== WAITLIST_TYPE && reg.status !== 'Ammesso' && reg.status !== 'Concluso') {
               
               const myDeviceId = getDeviceId();
-              getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'scanners', myDeviceId)).then(snap => {
-                let currentScans = snap.exists() ? (snap.data().scans || 0) : 0;
-                updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'scanners', myDeviceId), { scans: currentScans + 1, lastSeen: Date.now() });
-              });
+              updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'scanners', myDeviceId), {
+                scans: increment(1), lastSeen: Date.now()
+              }).catch(error => console.warn('Contatore scanner non aggiornato', error));
 
               document.getElementById('scannerScannedName').innerText = `${reg.cognome} ${reg.nome}`;
               document.getElementById('scannerScannedPath').innerText = reg.studyPath;
