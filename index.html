@@ -1216,44 +1216,98 @@
       return result;
     }
 
+    // Tutte le scadenze sono calcolate nel fuso Europe/Rome anche su telefoni
+    // configurati con un fuso diverso. Non dipendere dall'orario locale del browser.
     function parseOpenDayLocalDate(dateStr, timeStr = '00:00') {
-      const [y, m, d] = String(dateStr || '').split('-').map(Number);
-      const [hh, mm] = String(timeStr || '00:00').trim().split(':').map(Number);
-      if (![y, m, d, hh, mm].every(Number.isFinite)) return null;
-      return new Date(y, m - 1, d, hh, mm, 0, 0);
+      const dateParts = String(dateStr || '').slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      const timeParts = String(timeStr || '').trim().match(/^(\d{1,2}):(\d{2})$/);
+      if (!dateParts || !timeParts) return null;
+      const [year, month, day] = dateParts.slice(1).map(Number);
+      const hour = Number(timeParts[1]), minute = Number(timeParts[2]);
+      if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59) return null;
+      const expected = Date.UTC(year, month - 1, day, hour, minute);
+      let instant = expected;
+      const fmt = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+      });
+      for (let i = 0; i < 3; i++) {
+        const parts = fmt.formatToParts(new Date(instant));
+        const val = type => Number(parts.find(p => p.type === type)?.value || 0);
+        const actual = Date.UTC(val('year'), val('month') - 1, val('day'), val('hour'), val('minute'));
+        if (actual === expected) break;
+        instant += expected - actual;
+      }
+      return new Date(instant);
     }
 
     function openDayEventEndPlusFive(reg) {
-      const slot = state.dates.find(d => d.id === reg.dateId);
+      // Salvato al momento della scansione: rimane utilizzabile se il turno
+      // non compare più nella lista locale dei turni aperti.
+      if (Number(reg?.pergamenaDueAt) > 0) return Number(reg.pergamenaDueAt);
+      const slot = state.dates.find(d => d.id === reg?.dateId);
       if (!slot?.date || !slot?.timeSlot) return null;
-      let endTime = String(slot.timeSlot).includes('-') ? String(slot.timeSlot).split('-')[1].trim() : String(slot.timeSlot).trim();
-      const end = parseOpenDayLocalDate(slot.date, endTime);
-      if (!end) return null;
-      end.setMinutes(end.getMinutes() + 5);
-      return end.getTime();
+      const times = String(slot.timeSlot).match(/\d{1,2}:\d{2}/g) || [];
+      const end = parseOpenDayLocalDate(slot.date, times[times.length - 1] || '');
+      return end ? end.getTime() + 5 * 60 * 1000 : null;
     }
 
-    // Distribuisce le scadenze sulla giornata (8:00-20:00 di Roma) anziché
-    // mettere tutti i promemoria in coda contemporaneamente. Può essere
-    // elaborato solo quando esiste un motore attivo nel browser o sul server.
+    // Un orario stabile per ogni codice distribuisce i promemoria nell'arco
+    // 09:00–16:00 del settimo giorno precedente (ora di Roma). L'HTML da solo
+    // non può eseguire questi appuntamenti quando tutti i browser sono chiusi.
     function openDayReminderDueAt(reg, slot, configuredDays = 7) {
       if (!slot?.date) return null;
-      const firstTime = (String(slot.timeSlot || '').match(/\d{1,2}:\d{2}/) || ['09:00'])[0];
-      const start = parseOpenDayLocalDate(slot.date, firstTime);
+      const startStr = (String(slot.timeSlot || '').match(/\d{1,2}:\d{2}/) || ['09:00'])[0];
+      const start = parseOpenDayLocalDate(slot.date, startStr);
       if (!start) return null;
-      const remindDate = parseOpenDayLocalDate(slot.date, '00:00');
-      if (!remindDate) return null;
-      remindDate.setDate(remindDate.getDate() - Math.max(1, Number(configuredDays) || 7));
+      const [year, month, day] = String(slot.date).slice(0, 10).split('-').map(Number);
+      const count = Math.max(1, Math.round(Number(configuredDays) || 7));
+      const target = new Date(Date.UTC(year, month - 1, day - count));
+      const targetDate = target.toISOString().slice(0, 10);
       let hash = 2166136261;
       for (const c of String(reg.code || reg.id || '')) {
         hash ^= c.charCodeAt(0);
         hash = Math.imul(hash, 16777619);
       }
-      const minutesFromMidnight = 8 * 60 + ((hash >>> 0) % (12 * 60));
-      remindDate.setMinutes(minutesFromMidnight);
-      return remindDate.getTime() < start.getTime() ? remindDate.getTime() : null;
+      const minuteInWindow = (hash >>> 0) % (7 * 60);
+      const hh = String(9 + Math.floor(minuteInWindow / 60)).padStart(2, '0');
+      const mm = String(minuteInWindow % 60).padStart(2, '0');
+      const due = parseOpenDayLocalDate(targetDate, `${hh}:${mm}`);
+      return due && due.getTime() < start.getTime() ? due.getTime() : null;
     }
     window.openDayReminderDueAt = openDayReminderDueAt;
+
+    function openDayReminderWindowOpen() {
+      const time = openDayRomeParts().time;
+      return time >= '09:00' && time < '16:00';
+    }
+    window.openDayReminderWindowOpen = openDayReminderWindowOpen;
+
+    // La stessa operazione atomica è usata sia dal timer scanner sia dal
+    // controllo del motore: non può riaccodare la pergamena dopo l'inoltro.
+    async function queueOpenDayFinalParchment(code, knownReg = null) {
+      if (!code) return false;
+      const ref = doc(db, 'artifacts', appId, 'public', 'data', 'registrations', String(code));
+      const queuedAt = Date.now();
+      const queued = await runTransaction(db, async tx => {
+        const snap = await tx.get(ref);
+        if (!snap.exists()) return false;
+        const reg = { ...snap.data(), id: snap.id };
+        const dueAt = openDayEventEndPlusFive(reg);
+        if (reg.status !== 'Ammesso' || reg.pergamenaSentDate || !dueAt || Date.now() < dueAt) return false;
+        tx.update(ref, {
+          status: 'Concluso', pergamenaSentDate: 'IN_CODA_Q3',
+          pergamenaQueuedAt: dueAt, pergamenaDueAt: dueAt, concludedAt: queuedAt
+        });
+        return { dueAt };
+      });
+      if (queued && knownReg) Object.assign(knownReg, {
+        status: 'Concluso', pergamenaSentDate: 'IN_CODA_Q3',
+        pergamenaQueuedAt: queued.dueAt, pergamenaDueAt: queued.dueAt, concludedAt: queuedAt
+      });
+      return Boolean(queued);
+    }
+    window.queueOpenDayFinalParchment = queueOpenDayFinalParchment;
 
     async function reconcileScheduledOpenDayEmails() {
       const now = Date.now();
@@ -1294,11 +1348,14 @@
           if (start) {
             const dueAt = openDayReminderDueAt(reg, slot, reminderDays);
             if (start.getTime() > now && dueAt !== null && now >= dueAt) {
-              reg.promemoriaSentDate = 'IN_CODA_Q2';
+              // Prima salva su Firestore, poi aggiorna la copia locale: se la
+              // scrittura fallisce, il motore potrà riprovare al ciclo seguente.
               writes.push(updateDoc(
-                doc(db, 'artifacts', appId, 'public', 'data', 'registrations', reg.code),
-                { promemoriaSentDate: 'IN_CODA_Q2', promemoriaQueuedAt: now }
-              ));
+                doc(db, 'artifacts', appId, 'public', 'data', 'registrations', reg.code || reg.id),
+                { promemoriaSentDate: 'IN_CODA_Q2', promemoriaQueuedAt: dueAt, promemoriaDueAt: dueAt }
+              ).then(() => Object.assign(reg, {
+                promemoriaSentDate: 'IN_CODA_Q2', promemoriaQueuedAt: dueAt, promemoriaDueAt: dueAt
+              })));
             }
           }
         }
@@ -1307,17 +1364,7 @@
         if (reg.status === 'Ammesso' && !reg.pergamenaSentDate) {
           const dueAt = openDayEventEndPlusFive(reg);
           if (dueAt && now >= dueAt) {
-            reg.status = 'Concluso';
-            reg.pergamenaSentDate = 'IN_CODA_Q3';
-            reg.pergamenaQueuedAt = dueAt;
-            reg.pergamenaDueAt = dueAt;
-            writes.push(updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', reg.code), {
-              status: 'Concluso',
-              pergamenaSentDate: 'IN_CODA_Q3',
-              pergamenaQueuedAt: dueAt,
-              pergamenaDueAt: dueAt,
-              concludedAt: now
-            }));
+            writes.push(queueOpenDayFinalParchment(reg.code || reg.id, reg));
           }
         }
       }
@@ -1353,7 +1400,7 @@
 
     const SmartEmailEngine = {
       maxDaily: 1500,
-      batchSize: 5,
+      batchSize: 10,
       intervalMs: 60000,
       timerId: null,
       leaseHeartbeatId: null,
@@ -1456,9 +1503,11 @@
             items.push({ reg, type: def.type, field: def.field, queuedAtField: def.queuedAtField, url: def.url, order: def.order, queuedAt, key: `${code}:${def.type}:${queuedAt}` });
           }
         }
-        // FIFO per data di accodamento. A parità di timestamp segue l'ordine richiesto:
-        // ammissione, conferma ingresso, conferma uscita, promemoria.
-        return items.sort((a, b) => a.queuedAt - b.queuedAt || a.order - b.order || String(a.reg.code || a.reg.id).localeCompare(String(b.reg.code || b.reg.id)));
+        // Prima le comunicazioni generate da operazioni in tempo reale, poi le
+        // programmate. FIFO all'interno di ogni fascia di priorità.
+        const priority = { pass: 0, presenza: 1, cancellazione: 1, pergamena: 2, promemoria: 3 };
+        return items.sort((a, b) => (priority[a.type] ?? 5) - (priority[b.type] ?? 5) ||
+          a.queuedAt - b.queuedAt || String(a.reg.code || a.reg.id).localeCompare(String(b.reg.code || b.reg.id)));
       },
 
       async preparePendingQueue() {
@@ -1545,6 +1594,7 @@
         this.isProcessing = true;
         let leaseAcquired = false;
         let localFallbackLease = false;
+        let anotherBatchNeeded = false;
         try {
           // Preferenza al blocco condiviso tra tutti i dispositivi.
           // Se la sola operazione di lock fallisce per quota Firestore, il worker già
@@ -1562,9 +1612,13 @@
           // eseguire una seconda riconciliazione produceva lavoro duplicato.
           const queue = await this.preparePendingQueue();
           if (!queue.length) return true;
-          this.log(`Coda condivisa: avvio invio sequenziale di tutte le ${queue.length} richieste in attesa.`);
+          const readyQueue = openDayReminderWindowOpen() ? queue : queue.filter(item => item.type !== 'promemoria');
+          if (!readyQueue.length) return true;
+          const nextBatch = readyQueue.slice(0, this.batchSize);
+          anotherBatchNeeded = readyQueue.length > nextBatch.length;
+          this.log(`Coda condivisa: ${queue.length} richieste; elaboro ${nextBatch.length} (priorità alle comunicazioni immediate).`);
           let attempted = 0;
-          for (const queuedItem of queue) {
+          for (const queuedItem of nextBatch) {
             if (this.queueLeaseLost) break;
             if (localFallbackLease && !renewLocalOpenDayEmailQueueLease()) {
               this.queueLeaseLost = true;
@@ -1577,6 +1631,9 @@
             if (isCancelled && queuedItem.type !== 'cancellazione') continue;
             if (!isCancelled && queuedItem.type === 'cancellazione') continue;
             if (!String(currentReg[queuedItem.field] || '').includes('IN_CODA')) continue;
+            // Nessun promemoria automatico al di fuori delle 09:00-16:00.
+            // I messaggi ancora in coda restano disponibili nel database.
+            if (queuedItem.type === 'promemoria' && !openDayReminderWindowOpen()) continue;
             await this.dispatchEmail({ ...queuedItem, reg: currentReg });
             attempted++;
             if (this.firestoreQuotaPaused) {
@@ -1602,6 +1659,11 @@
           if (leaseAcquired) await this.releaseLease();
           if (localFallbackLease) releaseLocalOpenDayEmailQueueLease();
           this.isProcessing = false;
+          // Rilascia il blocco tra lotti: una nuova prenotazione o scansione
+          // può prendere la precedenza senza attendere centinaia di promemoria.
+          if (anotherBatchNeeded && this.timerId && !this.firestoreQuotaPaused) {
+            setTimeout(() => this.processQueues().catch(e => this.log(String(e), 'error')), 1200);
+          }
         }
       },
 
@@ -1750,14 +1812,19 @@
         // Controllo finale sul database dopo aver acquisito il lease condiviso:
         // un invio completato dal worker server non deve essere ripetuto da un
         // Registro Docenti rimasto con snapshot locale in ritardo.
-        const currentSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', code));
-        if (!currentSnap.exists() || !String(currentSnap.data()[field] || '').includes('IN_CODA')) {
-          this.log(`Comunicazione ${code} già elaborata dal worker condiviso: salto doppio invio.`, 'info');
+        // Il percorso immediato ha già riletto il documento *dentro il lock*:
+        // riutilizzarlo evita una lettura Firestore e riduce la latenza.
+        const freshData = item.freshVerified ? item.reg : await (async () => {
+          const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', code));
+          return snap.exists() ? snap.data() : null;
+        })();
+        if (!freshData || !String(freshData[field] || '').includes('IN_CODA')) {
+          this.log(`Comunicazione ${code} già elaborata o non più in coda: salto doppio invio.`, 'info');
           return false;
         }
-        const freshIsCancelled = normalizeWaitlistText(currentSnap.data().status) === 'annullato' || String(currentSnap.data().type||'').toLowerCase() === 'cancellazione';
+        const freshIsCancelled = normalizeWaitlistText(freshData.status) === 'annullato' || String(freshData.type||'').toLowerCase() === 'cancellazione';
         if (freshIsCancelled !== (item.type === 'cancellazione')) return false;
-        Object.assign(item.reg, currentSnap.data());
+        Object.assign(item.reg, freshData);
         let requestMayHaveReachedGoogle = false;
         let ambiguousDelivery = false;
         try {
@@ -1869,6 +1936,20 @@
     };
     window.SmartEmailEngine = SmartEmailEngine;
 
+    // Se il browser rimane aperto ma torna in primo piano dopo sospensione o
+    // perdita di rete, riavvia subito la riconciliazione delle scadenze.
+    let openDayWakeCheckAt = 0;
+    function wakeOpenDayEmailEngine() {
+      if (document.hidden || !window.SmartEmailEngine?.timerId) return;
+      const now = Date.now();
+      if (now - openDayWakeCheckAt < 10000) return;
+      openDayWakeCheckAt = now;
+      window.SmartEmailEngine.processQueues().catch(error => console.warn('Ripresa controllo scadenze', error));
+    }
+    window.addEventListener('focus', wakeOpenDayEmailEngine);
+    window.addEventListener('online', wakeOpenDayEmailEngine);
+    document.addEventListener('visibilitychange', wakeOpenDayEmailEngine);
+
     // Controllo diagnostico su richiesta, non ogni visita pubblica.
     window.checkOpenDayBackgroundWorker = async function() {
       const target = document.getElementById('openDayBackgroundWorkerStatus');
@@ -1896,6 +1977,7 @@
       for (const reg of (state.registrations || [])) {
         for (const field of ['passSentDate','promemoriaSentDate','presenzaSentDate','pergamenaSentDate','cancellationEmailStatus']) {
           const value = String(reg[field] || '');
+          if (field === 'promemoriaSentDate' && !openDayReminderWindowOpen()) continue;
           if (value.includes('IN_CODA')) return true;
           if (value.includes('ELABORAZIONE') && Number(reg.emailProcessingAt || 0) && now - Number(reg.emailProcessingAt) > 180000) return true;
         }
@@ -2120,7 +2202,7 @@
         const queuedAt = Number(reg[def.queuedAtField] || reg.timestamp || Date.now());
         const submitted = await engine.dispatchEmail({
           reg, type, field: def.field, queuedAtField: def.queuedAtField,
-          url: def.url, queuedAt, key: `${code}:${type}:${queuedAt}`
+          url: def.url, queuedAt, key: `${code}:${type}:${queuedAt}`, freshVerified: true
         });
         return { submitted: Boolean(submitted), pending: !submitted };
       } catch (error) {
@@ -4120,65 +4202,86 @@ Preferenza: ${openDayLiceoPreferenceLabel(regData)}` : regData.studyPath; docume
     function exitCompanionScanner() { compActive = false; compStream?.getTracks().forEach(t=>t.stop()); window.location.href = window.location.origin + window.location.pathname; }
     window.exitCompanionScanner = exitCompanionScanner;
 
+    // Scansione atomica: ingresso e accodamento attestato sono salvati prima
+    // di mostrare il successo. Due scanner contemporanei non duplicano l'ingresso.
+    async function recordOpenDayScannerEntry(code, previousReg) {
+      const regRef = doc(db, 'artifacts', appId, 'public', 'data', 'registrations', code);
+      const accepted = await runTransaction(db, async tx => {
+        const snap = await tx.get(regRef);
+        if (!snap.exists()) return null;
+        const current = { id: snap.id, ...snap.data() };
+        if (!isSeatActiveRegistration(current) || current.status === 'Ammesso' || current.status === 'Concluso') return null;
+        const now = Date.now();
+        const dueAt = openDayEventEndPlusFive(current);
+        tx.update(regRef, {
+          status: 'Ammesso', presenzaSentDate: 'IN_CODA_Q3', presenzaQueuedAt: now,
+          ...(dueAt ? { pergamenaDueAt: dueAt } : {})
+        });
+        return { ...current, dueAt };
+      });
+      if (!accepted) return false;
+
+      const myDeviceId = getDeviceId();
+      updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'scanners', myDeviceId), {
+        scans: increment(1), lastSeen: Date.now()
+      }).catch(error => console.warn('Contatore scanner non aggiornato', error));
+      document.getElementById('scannerScannedName').innerText = `${accepted.cognome} ${accepted.nome}`;
+      document.getElementById('scannerScannedPath').innerText = accepted.studyPath;
+      document.getElementById('scannerSuccessOverlay').classList.remove('hidden');
+      setTimeout(() => document.getElementById('scannerSuccessOverlay').classList.add('hidden'), 4000);
+
+      // Avvia l'inoltro immediato solo dopo il commit dell'ingresso su Firestore.
+      // Il blocco condiviso impedisce che il motore del Registro lo reinvii.
+      sendOpenDayImmediateEmail(code, 'presenza').then(result => {
+        if (!result.submitted && !result.alreadyProcessed)
+          showToast('Ingresso salvato, ma attestato ancora in coda: ' + (result.reason || 'verificare il motore'), 'warning');
+      }).catch(error => console.error('Inoltro ingresso Open Day', error));
+
+      // Il timer è solo un acceleratore mentre la pagina rimane aperta.
+      // La stessa transazione viene usata dal controllo delle scadenze del motore.
+      if (accepted.dueAt) {
+        setTimeout(async () => {
+          try {
+            const queued = await queueOpenDayFinalParchment(code, { ...accepted, pergamenaDueAt: accepted.dueAt });
+            if (queued) await sendOpenDayImmediateEmail(code, 'pergamena');
+          } catch (error) { console.error('Accodamento uscita dopo orario di fine', error); }
+        }, Math.max(0, accepted.dueAt - Date.now()));
+      }
+      return true;
+    }
+    window.recordOpenDayScannerEntry = recordOpenDayScannerEntry;
+
     function tickComp() {
-      if(!compActive) return;
-      const video = document.getElementById('companionVideo'), canvas = document.getElementById('companionCanvas'), ctx = canvas.getContext("2d", { willReadFrequently: true });
-      if(video.readyState === video.HAVE_ENOUGH_DATA) {
-        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+      if (!compActive) return;
+      const video = document.getElementById('companionVideo');
+      const canvas = document.getElementById('companionCanvas');
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const code = jsQR(ctx.getImageData(0, 0, canvas.width, canvas.height).data, canvas.width, canvas.height, { inversionAttempts: "dontInvert" });
-        if (code && code.data) {
-          const qrData = code.data.trim().toUpperCase();
-          if (qrData !== lastScannedCode) {
-            lastScannedCode = qrData;
-            const reg = state.registrations.find(r => r.code === qrData);
-            if (reg && reg.type !== WAITLIST_TYPE && reg.status !== 'Ammesso' && reg.status !== 'Concluso') {
-              
-              const myDeviceId = getDeviceId();
-              updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'scanners', myDeviceId), {
-                scans: increment(1), lastSeen: Date.now()
-              }).catch(error => console.warn('Contatore scanner non aggiornato', error));
-
-              document.getElementById('scannerScannedName').innerText = `${reg.cognome} ${reg.nome}`;
-              document.getElementById('scannerScannedPath').innerText = reg.studyPath;
-              document.getElementById('scannerSuccessOverlay').classList.remove('hidden');
-              
-              updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', qrData), { status: 'Ammesso', presenzaSentDate: 'IN_CODA_Q3', presenzaQueuedAt: Date.now() })
-                .then(() => sendOpenDayImmediateEmail(qrData, 'presenza'))
-                .catch(e => console.error("Invio immediato attestato ingresso non riuscito", e));
-              
-              const targetDateObj = state.dates.find(d => d.id === reg.dateId);
-              let delayMs = 5 * 60 * 1000; 
-              if (targetDateObj) {
-                try {
-                  let endTimeStr = targetDateObj.timeSlot;
-                  if (endTimeStr.includes('-')) {
-                    endTimeStr = endTimeStr.split('-')[1].trim();
-                  }
-                  const timeParts = endTimeStr.split(':');
-                  const endDateTime = new Date(targetDateObj.date);
-                  endDateTime.setHours(parseInt(timeParts[0], 10), parseInt(timeParts[1], 10) + 5, 0, 0); 
-                  
-                  delayMs = endDateTime.getTime() - Date.now();
-                  if (delayMs < 0) delayMs = 15000; 
-                } catch(e) { console.error("Errore parse data", e); }
-              }
-
-              setTimeout(async () => {
-                 try {
-                   await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', qrData), { status: 'Concluso', pergamenaSentDate: 'IN_CODA_Q3', pergamenaQueuedAt: Date.now() });
-                   await sendOpenDayImmediateEmail(qrData, 'pergamena');
-                 } catch (e) { console.error('Invio chiusura Open Day', e); }
-              }, delayMs);
-
-              setTimeout(() => { document.getElementById('scannerSuccessOverlay').classList.add('hidden'); lastScannedCode = null; window.SmartEmailEngine.flushNow(); }, 4000);
+        const result = jsQR(ctx.getImageData(0, 0, canvas.width, canvas.height).data,
+          canvas.width, canvas.height, { inversionAttempts: 'dontInvert' });
+        if (result?.data) {
+          const code = result.data.trim().toUpperCase();
+          if (code !== lastScannedCode) {
+            lastScannedCode = code;
+            const candidate = state.registrations.find(reg => (reg.code || reg.id) === code);
+            if (candidate && isSeatActiveRegistration(candidate) &&
+                candidate.status !== 'Ammesso' && candidate.status !== 'Concluso') {
+              recordOpenDayScannerEntry(code, candidate).then(admitted => {
+                if (!admitted) showToast('Il codice risulta già accreditato o non è più valido.', 'warning');
+              }).catch(error => {
+                console.error('Scansione Open Day non completata', error);
+                showToast(openDayErrorDescription(error, 'Registrazione ingresso'), 'error');
+              }).finally(() => { setTimeout(() => { if (lastScannedCode === code) lastScannedCode = null; }, 3500); });
             } else {
-               setTimeout(() => lastScannedCode = null, 2000); 
+              setTimeout(() => { if (lastScannedCode === code) lastScannedCode = null; }, 2000);
             }
           }
         }
       }
-      if(compActive) requestAnimationFrame(tickComp);
+      if (compActive) requestAnimationFrame(tickComp);
     }
 
     function initBubbles() {
