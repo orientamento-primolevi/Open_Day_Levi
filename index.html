@@ -374,12 +374,17 @@
           <button onclick="window.switchAdminTab('tabLiveScanner')" class="px-5 py-2.5 bg-slate-200 text-slate-800 font-bold rounded-xl text-xs shadow-sm uppercase tracking-wider">Scanner Tel.</button>
           <button onclick="window.switchAdminTab('tabSettings')" class="px-5 py-2.5 bg-slate-200 text-slate-800 font-bold rounded-xl text-xs shadow-sm uppercase tracking-wider">Impostazioni</button>
           <button onclick="window.switchAdminTab('tabStatistics')" class="px-5 py-2.5 bg-slate-200 text-slate-800 font-bold rounded-xl text-xs shadow-sm uppercase tracking-wider">Statistiche</button>
+          <button onclick="window.switchAdminTab('tabAttendance')" class="px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl text-xs shadow-sm uppercase tracking-wider flex items-center gap-1.5"><i data-lucide="pie-chart" class="w-4 h-4"></i> Presenze / Assenze</button>
           <button onclick="window.logoutAdmin()" class="px-4 py-2.5 bg-rose-100 hover:bg-rose-200 text-rose-700 font-bold rounded-xl text-xs shadow-sm ml-4 transition" title="Esci"><i data-lucide="log-out" class="w-4 h-4"></i></button>
         </div>
       </div>
 
       <!-- TAB: MOTORE E-MAIL AUTOMATICO (SMART QUEUE) -->
       <div id="tabSmartEmail" class="hidden space-y-6">
+        <div class="rounded-xl bg-indigo-50 border border-indigo-200 p-4 text-xs font-bold text-indigo-950" role="status" aria-live="polite">
+          <div class="flex items-center gap-2"><i data-lucide="clock-4" class="w-4 h-4"></i> <span id="openDayBackgroundWorkerStatus">Automazione a browser chiuso: verifica configurazione Google Apps Script.</span></div>
+          <p class="mt-1 text-indigo-700 text-[11px]">Gli invii generati da un genitore vengono tentati subito. Per i promemoria e le uscite programmati quando nessun browser è aperto serve un servizio server pianificato: nessun HTML statico può sostituirlo.</p>
+        </div>
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
           <!-- Stato Sistema -->
@@ -416,7 +421,7 @@
               </div>
             </div>
             <div class="mt-4 pt-4 border-t border-slate-100">
-               <p class="text-[10px] text-slate-500 font-bold leading-relaxed">Il motore tenta le richieste ogni 60 secondi, solo mentre questa pagina Docenti o lo scanner resta aperto. Se Firebase è in quota esaurita, gli invii rimangono in coda. La conferma di consegna richiede il registro Apps Script.</p>
+               <p class="text-[10px] text-slate-500 font-bold leading-relaxed">Gli invii immediati vengono tentati dal browser che registra l’operazione. Le scadenze future (promemoria e chiusure) richiedono il motore attivo su un browser oppure un processo lato server per funzionare a browser chiuso. La conferma di consegna richiede il registro Apps Script.</p>
             </div>
           </div>
 
@@ -454,7 +459,7 @@
                  <button onclick="window.SmartEmailEngine.flushNow()" class="text-[9px] bg-slate-700 hover:bg-slate-600 text-white px-2 py-1 rounded font-bold uppercase transition">Forza Esecuzione Ora</button>
                </div>
                <div id="engineConsoleLog" class="system-log flex-grow overflow-y-auto text-[10px] font-mono text-emerald-400 space-y-1.5 scroll-smooth">
-                  <div><span class="text-slate-500">[INFO]</span> Il motore lavora mentre l’Area Docenti o la modalità scanner resta aperta.</div>
+                  <div><span class="text-slate-500">[INFO]</span> Gli invii immediati si effettuano nel browser che compie l’operazione. Per invii programmati a browser chiuso serve un processo server.</div>
                   <div><span class="text-slate-500">[--:--:--]</span> Sistema pronto. In attesa di dati...</div>
                </div>
             </div>
@@ -664,6 +669,64 @@
              <div class="relative w-full h-64 flex-grow"><canvas id="chartStato"></canvas></div>
              <p id="statsTextPartecipazione" class="text-xs text-slate-600 mt-4 font-semibold text-center bg-slate-50 p-3 rounded-xl border border-slate-100"></p>
            </div>
+        </div>
+      </div>
+
+      <!-- PANNELLO AGGIUNTIVO: PRESENZE / ASSENZE. Usa esclusivamente dati già presenti nel Registro. -->
+      <div id="tabAttendance" class="hidden space-y-6">
+        <div class="glass-card bg-white rounded-3xl border border-teal-100 p-6 shadow-sm">
+          <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-5">
+            <div class="space-y-2">
+              <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-50 text-teal-700 border border-teal-100 text-[10px] uppercase font-black tracking-widest"><i data-lucide="pie-chart" class="w-3.5 h-3.5"></i> Analisi partecipazione</div>
+              <h3 class="font-outfit text-2xl font-black text-indigo-950">Presenze <span class="text-teal-600">/ Assenze</span></h3>
+              <p class="text-xs leading-relaxed font-semibold text-slate-600 max-w-2xl">Iscrizioni, ingressi e assenze per <strong>singola data</strong> e <strong>singolo indirizzo</strong>. I turni futuri e ancora in corso non generano assenze automatiche. Grafici e filtri utilizzano il Registro già caricato, <strong>senza nuove richieste a Firebase</strong>.</p>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full lg:w-auto">
+              <div><label for="attendanceDaySelect" class="block text-[10px] uppercase font-black text-slate-500 mb-1">Giornata Open Day</label><select id="attendanceDaySelect" onchange="window.renderOpenDayAttendance()" class="w-full sm:w-52 rounded-xl p-3 border border-teal-200 bg-white text-indigo-950 text-xs font-extrabold outline-none focus:ring-2 focus:ring-teal-400"><option value="all">Tutte le giornate</option></select></div>
+              <div><label for="attendancePathSelect" class="block text-[10px] uppercase font-black text-slate-500 mb-1">Indirizzo di studio</label><select id="attendancePathSelect" onchange="window.renderOpenDayAttendance()" class="w-full sm:w-56 rounded-xl p-3 border border-teal-200 bg-white text-indigo-950 text-xs font-extrabold outline-none focus:ring-2 focus:ring-teal-400"><option value="all">Tutti gli indirizzi</option></select></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3" aria-live="polite">
+          <div class="rounded-2xl bg-white border border-slate-200 shadow-sm p-5"><span class="block text-[10px] uppercase tracking-wider font-black text-slate-500">Iscrizioni confermate</span><strong id="attendanceTotalEnrolled" class="block text-3xl text-indigo-950 font-black mt-2 tabular-nums">0</strong><span class="text-[10px] font-bold text-slate-500">Escluse attese e cancellazioni</span></div>
+          <div class="rounded-2xl bg-emerald-50 border border-emerald-200 shadow-sm p-5"><span class="block text-[10px] uppercase tracking-wider font-black text-emerald-800">Entrati</span><strong id="attendanceTotalEntered" class="block text-3xl text-emerald-700 font-black mt-2 tabular-nums">0</strong><span id="attendanceRateEntered" class="text-xs font-black text-emerald-700">—</span></div>
+          <div class="rounded-2xl bg-rose-50 border border-rose-200 shadow-sm p-5"><span class="block text-[10px] uppercase tracking-wider font-black text-rose-800">Assenti</span><strong id="attendanceTotalAbsent" class="block text-3xl text-rose-700 font-black mt-2 tabular-nums">0</strong><span id="attendanceRateAbsent" class="text-xs font-black text-rose-700">—</span></div>
+          <div class="rounded-2xl bg-amber-50 border border-amber-200 shadow-sm p-5"><span class="block text-[10px] uppercase tracking-wider font-black text-amber-800">Da verificare</span><strong id="attendanceTotalPending" class="block text-3xl text-amber-700 font-black mt-2 tabular-nums">0</strong><span id="attendanceRatePending" class="text-xs font-black text-amber-700">—</span></div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-5 gap-5">
+          <div class="glass-card lg:col-span-2 p-5 bg-white border border-slate-200 rounded-3xl shadow-sm">
+            <h4 class="text-base text-indigo-950 font-black font-outfit">Distribuzione delle presenze</h4>
+            <p class="text-[11px] text-slate-500 font-semibold mt-1">Grafico a torta relativo ai filtri selezionati</p>
+            <div class="relative h-72 mt-3"><canvas id="attendanceMainChart" role="img" aria-label="Grafico a torta: entrati, assenti e da verificare"></canvas></div>
+            <p id="attendanceChartSummary" class="text-[11px] text-slate-600 text-center font-semibold mt-3" aria-live="polite">Seleziona una giornata per vedere i dati.</p>
+          </div>
+          <div class="glass-card lg:col-span-3 p-5 bg-white border border-slate-200 rounded-3xl shadow-sm flex flex-col justify-center gap-4">
+            <h4 class="text-base text-indigo-950 font-black font-outfit">Come si calcolano i risultati?</h4>
+            <div class="grid sm:grid-cols-3 gap-3">
+              <div class="p-4 rounded-xl border border-emerald-100 bg-emerald-50"><span class="block font-extrabold text-emerald-800 text-xs">Entrati</span><p class="mt-1 text-[11px] text-slate-700 font-semibold leading-relaxed">Registrazioni con stato <b>Ammesso</b> o <b>Concluso</b>, anche dopo l’uscita.</p></div>
+              <div class="p-4 rounded-xl border border-rose-100 bg-rose-50"><span class="block font-extrabold text-rose-800 text-xs">Assenti</span><p class="mt-1 text-[11px] text-slate-700 font-semibold leading-relaxed">Stato <b>Assente</b> oppure iscritto non accreditato dopo la fine del turno.</p></div>
+              <div class="p-4 rounded-xl border border-amber-100 bg-amber-50"><span class="block font-extrabold text-amber-800 text-xs">Da verificare</span><p class="mt-1 text-[11px] text-slate-700 font-semibold leading-relaxed">Iscritti a turni futuri/in corso o con stato non determinabile.</p></div>
+            </div>
+            <div class="rounded-xl bg-slate-50 border border-slate-200 p-4 text-[11px] text-slate-600 font-semibold leading-relaxed">Le percentuali sono calcolate sul totale delle <strong>prenotazioni attive</strong> per ciascun gruppo, non sui posti occupati dagli accompagnatori. Una prenotazione con più alunni è conteggiata come una sola registrazione perché il Registro salva un unico record per famiglia. Le liste d'attesa e gli annullati sono esclusi.</div>
+          </div>
+        </div>
+
+        <div class="glass-card p-5 rounded-3xl bg-white border border-slate-200 shadow-sm">
+          <h4 class="text-lg font-black text-indigo-950 font-outfit">Presenze e assenze per giornata</h4>
+          <p class="text-xs font-semibold text-slate-500 mt-1 mb-4">Una torta per ciascuna data disponibile nel filtro, con percentuali e totali.</p>
+          <div id="attendanceDayCards" class="grid sm:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+        </div>
+        <div class="glass-card p-5 rounded-3xl bg-white border border-slate-200 shadow-sm">
+          <h4 class="text-lg font-black text-indigo-950 font-outfit">Presenze e assenze per indirizzo</h4>
+          <p class="text-xs font-semibold text-slate-500 mt-1 mb-4">Per il liceo viene rispettata anche la preferenza fra Scienze Applicate e Curvatura Economica, quando registrata.</p>
+          <div id="attendancePathCards" class="grid sm:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+        </div>
+        <div class="glass-card p-5 rounded-3xl bg-white border border-slate-200 shadow-sm">
+          <h4 class="text-lg font-black text-indigo-950 font-outfit">Dettaglio per data e indirizzo</h4>
+          <p class="text-xs font-semibold text-slate-500 mt-1 mb-3">Tutte le combinazioni presenti nel Registro e compatibili con i filtri. Ogni percentuale è riferita alle iscrizioni della propria riga.</p>
+          <div id="attendanceBreakdownTable" class="overflow-x-auto"></div>
         </div>
       </div>
     </section>
@@ -1170,6 +1233,28 @@
       return end.getTime();
     }
 
+    // Distribuisce le scadenze sulla giornata (8:00-20:00 di Roma) anziché
+    // mettere tutti i promemoria in coda contemporaneamente. Può essere
+    // elaborato solo quando esiste un motore attivo nel browser o sul server.
+    function openDayReminderDueAt(reg, slot, configuredDays = 7) {
+      if (!slot?.date) return null;
+      const firstTime = (String(slot.timeSlot || '').match(/\d{1,2}:\d{2}/) || ['09:00'])[0];
+      const start = parseOpenDayLocalDate(slot.date, firstTime);
+      if (!start) return null;
+      const remindDate = parseOpenDayLocalDate(slot.date, '00:00');
+      if (!remindDate) return null;
+      remindDate.setDate(remindDate.getDate() - Math.max(1, Number(configuredDays) || 7));
+      let hash = 2166136261;
+      for (const c of String(reg.code || reg.id || '')) {
+        hash ^= c.charCodeAt(0);
+        hash = Math.imul(hash, 16777619);
+      }
+      const minutesFromMidnight = 8 * 60 + ((hash >>> 0) % (12 * 60));
+      remindDate.setMinutes(minutesFromMidnight);
+      return remindDate.getTime() < start.getTime() ? remindDate.getTime() : null;
+    }
+    window.openDayReminderDueAt = openDayReminderDueAt;
+
     async function reconcileScheduledOpenDayEmails() {
       const now = Date.now();
       const configuredDays = Number(window.promemoriaDays ?? 7);
@@ -1207,8 +1292,8 @@
             : String(slot.timeSlot || '00:00').trim();
           const start = parseOpenDayLocalDate(slot.date, startTime);
           if (start) {
-            const remainingMs = start.getTime() - now;
-            if (remainingMs > 0 && remainingMs <= reminderDays * 86400000) {
+            const dueAt = openDayReminderDueAt(reg, slot, reminderDays);
+            if (start.getTime() > now && dueAt !== null && now >= dueAt) {
               reg.promemoriaSentDate = 'IN_CODA_Q2';
               writes.push(updateDoc(
                 doc(db, 'artifacts', appId, 'public', 'data', 'registrations', reg.code),
@@ -1662,6 +1747,17 @@
         const field = fieldMap[item.type];
         if (!field) return false;
         const code = item.reg.code || item.reg.id;
+        // Controllo finale sul database dopo aver acquisito il lease condiviso:
+        // un invio completato dal worker server non deve essere ripetuto da un
+        // Registro Docenti rimasto con snapshot locale in ritardo.
+        const currentSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', code));
+        if (!currentSnap.exists() || !String(currentSnap.data()[field] || '').includes('IN_CODA')) {
+          this.log(`Comunicazione ${code} già elaborata dal worker condiviso: salto doppio invio.`, 'info');
+          return false;
+        }
+        const freshIsCancelled = normalizeWaitlistText(currentSnap.data().status) === 'annullato' || String(currentSnap.data().type||'').toLowerCase() === 'cancellazione';
+        if (freshIsCancelled !== (item.type === 'cancellazione')) return false;
+        Object.assign(item.reg, currentSnap.data());
         let requestMayHaveReachedGoogle = false;
         let ambiguousDelivery = false;
         try {
@@ -1773,6 +1869,23 @@
     };
     window.SmartEmailEngine = SmartEmailEngine;
 
+    // Controllo diagnostico su richiesta, non ogni visita pubblica.
+    window.checkOpenDayBackgroundWorker = async function() {
+      const target = document.getElementById('openDayBackgroundWorkerStatus');
+      if (!target) return;
+      try {
+        const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'email_automation'));
+        const data = snap.exists() ? snap.data() : {};
+        const heartbeat = Number(data.lastHeartbeatAt || 0);
+        const ageMinutes = heartbeat ? Math.round((Date.now() - heartbeat) / 60000) : Infinity;
+        if (data.enabled && ageMinutes >= 0 && ageMinutes <= 20) {
+          target.textContent = `Worker automatico ATTIVO: ultimo controllo ${new Date(heartbeat).toLocaleString('it-IT')} (browser non necessario)`;
+        } else if (heartbeat) {
+          target.textContent = `Worker automatico da verificare: ultimo controllo ${new Date(heartbeat).toLocaleString('it-IT')}`;
+        } else target.textContent = 'Nessun processo automatico server rilevato: a browser chiuso le e-mail programmate non possono essere inviate dal solo HTML.';
+      } catch (e) { target.textContent = `Impossibile verificare worker automatico: ${e.message || e}`; }
+    };
+
     function openDayEmailWorkNeeded() {
       // Se i listener devono ancora arrivare, lascia al motore la possibilità
       // di fare il caricamento iniziale (una volta sola, non ad ogni minuto).
@@ -1798,8 +1911,8 @@
           ? String(slot.timeSlot).split('-')[0].trim()
           : String(slot.timeSlot || '00:00').trim();
         const start = parseOpenDayLocalDate(slot.date, startTime);
-        const remainingMs = start ? start.getTime() - now : 0;
-        if (remainingMs > 0 && remainingMs <= reminderDays * 86400000) return true;
+        const dueAt = openDayReminderDueAt(reg, slot, reminderDays);
+        if (start && start.getTime() > now && dueAt !== null && now >= dueAt) return true;
       }
       return false;
     }
@@ -1964,6 +2077,68 @@
     }
     window.inviaEmailScript = inviaEmailScript;
 
+
+    // INVIO IMMEDIATO PER LE AZIONI DEI GENITORI E PER IL LETTORE QR.
+    // Non richiede che un docente tenga aperto il Registro. Riutilizza gli
+    // endpoint esistenti, il blocco distribuito e il controllo anti-duplicati.
+    // L'inoltro POST no-cors resta distinto dalla consegna confermata.
+    const OPEN_DAY_IMMEDIATE_TYPES = Object.freeze({
+      pass: { field: 'passSentDate', queuedAtField: 'passQueuedAt', url: REGISTRATION_PARCHMENT_URL },
+      presenza: { field: 'presenzaSentDate', queuedAtField: 'presenzaQueuedAt', url: ATTESTATO_ENTRATA_URL },
+      pergamena: { field: 'pergamenaSentDate', queuedAtField: 'pergamenaQueuedAt', url: ATTESTATO_USCITA_URL },
+      cancellazione: { field: 'cancellationEmailStatus', queuedAtField: 'cancellationEmailQueuedAt', url: CANCEL_SCRIPT_URL }
+    });
+    async function dispatchOpenDayImmediateEmail(code, type) {
+      const def = OPEN_DAY_IMMEDIATE_TYPES[type];
+      if (!def || !code) return { submitted: false, reason: 'Tipo o codice non valido' };
+      const engine = window.SmartEmailEngine;
+      if (!engine) return { submitted: false, reason: 'Motore e-mail non inizializzato' };
+      const startedAt = Date.now();
+      // Evita che nello stesso browser il ciclo generale e quello immediato
+      // utilizzino contemporaneamente il medesimo proprietario del lock.
+      while (engine.isProcessing && Date.now() - startedAt < 18000) {
+        await new Promise(resolve => setTimeout(resolve, 150));
+      }
+      if (engine.isProcessing) return { submitted: false, pending: true, reason: 'Motore già occupato' };
+      let lease = false;
+      try {
+        lease = await acquireOpenDayEmailQueueLease(true, 12000);
+        if (!lease) return { submitted: false, pending: true, reason: 'Un altro dispositivo sta gestendo la coda' };
+        const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', String(code)));
+        if (!snap.exists()) return { submitted: false, reason: 'Prenotazione non trovata' };
+        const reg = { id: snap.id, ...snap.data() };
+        const value = String(reg[def.field] || '');
+        if (!value.includes('IN_CODA')) {
+          const alreadySubmitted = value === 'VERIFICA_INVIO';
+          return { submitted: alreadySubmitted, alreadyProcessed: true,
+            reason: alreadySubmitted ? 'Già inoltrata da un altro processo' : 'Comunicazione non più in coda' };
+        }
+        const isCancelled = normalizeWaitlistText(reg.status) === 'annullato' || String(reg.type || '').toLowerCase() === 'cancellazione';
+        if (isCancelled !== (type === 'cancellazione')) {
+          return { submitted: false, reason: 'Stato prenotazione non compatibile' };
+        }
+        const queuedAt = Number(reg[def.queuedAtField] || reg.timestamp || Date.now());
+        const submitted = await engine.dispatchEmail({
+          reg, type, field: def.field, queuedAtField: def.queuedAtField,
+          url: def.url, queuedAt, key: `${code}:${type}:${queuedAt}`
+        });
+        return { submitted: Boolean(submitted), pending: !submitted };
+      } catch (error) {
+        console.error('Invio immediato Open Day', type, code, error);
+        return { submitted: false, pending: true, reason: String(error?.message || error) };
+      } finally {
+        if (lease) await releaseOpenDayEmailQueueLease();
+      }
+    }
+    // Una sola comunicazione immediata per volta nello stesso browser.
+    // Il blocco Firestore soprastante coordina invece browser differenti.
+    let openDayImmediateChain = Promise.resolve();
+    function sendOpenDayImmediateEmail(code, type) {
+      const current = openDayImmediateChain.then(() => dispatchOpenDayImmediateEmail(code, type));
+      openDayImmediateChain = current.then(() => undefined, () => undefined);
+      return current;
+    }
+    window.sendOpenDayImmediateEmail = sendOpenDayImmediateEmail;
 
     // =========================
     // LISTA D'ATTESA OPEN DAY
@@ -2186,8 +2361,17 @@
             waitlistSeatsAtPromotion: needed,
             waitlistAvailableBeforePromotion: available,
             passSentDate: 'IN_CODA_Q1',
-            passQueuedAt: Date.now()
+            passQueuedAt: Date.now(),
+            waitlistPromotionQueuedAt: Date.now()
           };
+          // Se viene ammesso a meno di N giorni dall'evento, il promemoria
+          // va accodato anche quando la riconciliazione 7 giorni prima è passata.
+          const slotBegin = parseOpenDayLocalDate(slot.date, (String(slot.timeSlot||'').match(/\d{1,2}:\d{2}/)||['00:00'])[0]);
+          const remDays = Math.max(1, Number(window.promemoriaDays || 7));
+          if (!live.promemoriaSentDate && slotBegin && slotBegin.getTime() > Date.now() && slotBegin.getTime()-Date.now() <= remDays*86400000) {
+            patch.promemoriaSentDate = 'IN_CODA_Q2';
+            patch.promemoriaQueuedAt = Date.now();
+          }
           await updateDoc(ref, patch);
           promoted.push({ ...live, ...patch });
           occupied += needed;
@@ -2427,7 +2611,8 @@
     function toggleAdminPanel() { state.currentView === 'admin' ? window.navigateTo('home') : window.navigateTo('admin'); }
     window.toggleAdminPanel = toggleAdminPanel;
 
-    function switchAdminTab(id) { ['tabRegistrations','tabLiveScanner','tabSettings','tabStatistics','tabSmartEmail','tabWaitlist'].forEach(t => document.getElementById(t)?.classList.add('hidden')); ensureOpenDayWaitlistAdminUI(); document.getElementById(id)?.classList.remove('hidden'); if(id === 'tabWaitlist') renderOpenDayWaitlistAdmin(); if(id === 'tabStatistics') requestAnimationFrame(() => window.updateStatistics()); }
+    function switchAdminTab(id) {
+      if (id === "tabSmartEmail") window.checkOpenDayBackgroundWorker?.(); ['tabRegistrations','tabLiveScanner','tabSettings','tabStatistics','tabAttendance','tabSmartEmail','tabWaitlist'].forEach(t => document.getElementById(t)?.classList.add('hidden')); ensureOpenDayWaitlistAdminUI(); document.getElementById(id)?.classList.remove('hidden'); if(id === 'tabWaitlist') renderOpenDayWaitlistAdmin(); if(id === 'tabStatistics') requestAnimationFrame(() => window.updateStatistics()); if (id === 'tabAttendance') requestAnimationFrame(() => window.renderOpenDayAttendance()); }
     window.switchAdminTab = switchAdminTab;
     
     function openRecoveryModal() { document.getElementById('recoveryModalFormView').classList.remove('hidden'); document.getElementById('recoveryModalSuccessView').classList.add('hidden'); document.getElementById('recoveryModal').classList.remove('hidden'); }
@@ -2466,6 +2651,7 @@
       window.renderHomeDates();
       if (state.currentView === 'admin') {
         populateFilters(); window.renderRegistrations(); window.updateStatistics();
+        if (!document.getElementById('tabAttendance')?.classList.contains('hidden')) renderOpenDayAttendance();
         window.renderAdminDatesList(); renderOpenDayWaitlistAdmin();
       }
       scheduleOpenDayWaitlistReconcile();
@@ -2583,6 +2769,7 @@
         window.renderHomeDates();
         if (state.currentView === 'admin') {
           window.renderAdminDatesList(); window.renderRegistrations(); window.updateStatistics();
+          if (!document.getElementById('tabAttendance')?.classList.contains('hidden')) renderOpenDayAttendance();
         }
         populateFilters();
         scheduleOpenDayWaitlistReconcile();
@@ -2794,6 +2981,133 @@
     }
     window.selectOpenDayStatsDay = (day) => { const el = document.getElementById('statsDaySelect'); if (el) { el.value = day; window.updateStatistics(); } };
 
+
+    // ANALISI PRESENZE / ASSENZE (nessuna nuova query Firestore: sola elaborazione in memoria).
+    // Condivide esattamente le regole di inclusione del Registro e le date delle Statistiche.
+    window.chartAttendanceInstance = null;
+    function openDayAttendancePath(reg, slotsById) {
+      const slot = slotsById.get(String(reg.dateId || ''));
+      const path = canonicalOpenDayStudyPath(reg.studyPath || slot?.studyPath || '');
+      if (isOpenDayLiceoPath(path)) {
+        const pref = openDayLiceoPreferenceKey(reg);
+        if (pref === OPEN_DAY_LICEO_PREF_CURVATURA) return 'LS · Curvatura Economica';
+        if (pref === OPEN_DAY_LICEO_PREF_STANDARD) return 'LS · Scienze Applicate';
+        return 'LS · Preferenza non indicata';
+      }
+      return path ? path.split(' - ')[0].trim() : 'Indirizzo non indicato';
+    }
+    function openDayAttendanceKind(reg, day, slotsById) {
+      const status = normalizeWaitlistText(reg.status);
+      if (status === 'ammesso' || status === 'concluso') return 'entered';
+      if (status === 'assente') return 'absent';
+      if (status === 'iscritto' || status === 'iscrizione confermata')
+        return openDayStatsSessionFinished(reg, day, slotsById) ? 'absent' : 'pending';
+      return 'pending';
+    }
+    function openDayAttendanceTotals(rows) {
+      const totals = { enrolled: rows.length, entered: 0, absent: 0, pending: 0 };
+      rows.forEach(item => { totals[item.kind]++; });
+      return totals;
+    }
+    function openDayAttendancePercent(part, total) {
+      return total ? (100 * part / total).toLocaleString('it-IT', { maximumFractionDigits: 1 }) + '%' : '—';
+    }
+    function openDayAttendanceDayText(day) {
+      return day === 'senza-data' ? 'Data non disponibile' : openDayStatsDayLabel(day);
+    }
+    // Mini-grafici a torta HTML/CSS: nessuna dipendenza e nessuna ulteriore istanza Chart.js.
+    function openDayAttendanceMiniCard(title, total, label) {
+      const safeTitle = escWaitlist(title);
+      const safeLabel = escWaitlist(label);
+      const enterEnd = total.enrolled ? total.entered / total.enrolled * 100 : 0;
+      const absentEnd = enterEnd + (total.enrolled ? total.absent / total.enrolled * 100 : 0);
+      const ring = total.enrolled
+        ? `conic-gradient(#10b981 0% ${enterEnd}%, #fb7185 ${enterEnd}% ${absentEnd}%, #fbbf24 ${absentEnd}% 100%)`
+        : 'conic-gradient(#e2e8f0 0% 100%)';
+      return `<article class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 space-y-3 min-w-0">
+        <div class="flex justify-between items-start gap-2"><div class="min-w-0"><h5 class="text-sm text-indigo-950 font-black break-words">${safeTitle}</h5><p class="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 mt-1">${safeLabel}</p></div><span class="shrink-0 rounded-lg bg-indigo-100 text-indigo-800 px-2 py-1 text-[10px] font-black">${total.enrolled} iscritti</span></div>
+        <div class="flex gap-4 items-center">
+          <div class="shrink-0 rounded-full flex items-center justify-center" role="img" aria-label="${safeTitle}: ${total.entered} entrati, ${total.absent} assenti, ${total.pending} da verificare" style="width:112px;height:112px;background:${ring}">
+            <div class="rounded-full bg-white w-[76px] h-[76px] flex flex-col items-center justify-center shadow-sm"><strong class="font-outfit text-lg text-slate-800">${openDayAttendancePercent(total.entered,total.enrolled)}</strong><span class="text-[9px] uppercase text-slate-500 font-extrabold">entrati</span></div>
+          </div>
+          <div class="text-[11px] font-bold text-slate-700 space-y-2 min-w-0">
+            <p><span class="inline-block w-2 h-2 bg-emerald-500 rounded-full mr-1"></span>Entrati <b class="text-emerald-700">${total.entered} · ${openDayAttendancePercent(total.entered,total.enrolled)}</b></p>
+            <p><span class="inline-block w-2 h-2 bg-rose-400 rounded-full mr-1"></span>Assenti <b class="text-rose-700">${total.absent} · ${openDayAttendancePercent(total.absent,total.enrolled)}</b></p>
+            <p><span class="inline-block w-2 h-2 bg-amber-400 rounded-full mr-1"></span>Da verificare <b class="text-amber-700">${total.pending} · ${openDayAttendancePercent(total.pending,total.enrolled)}</b></p>
+          </div>
+        </div>
+      </article>`;
+    }
+    function renderOpenDayAttendance() {
+      const tab = document.getElementById('tabAttendance');
+      if (!tab || tab.classList.contains('hidden')) return;
+      const slotsById = new Map((state.dates || []).map(slot => [String(slot.id), slot]));
+      const rows = (state.registrations || []).filter(isSeatActiveRegistration).map(reg => {
+        const day = openDayStatsRegistrationDay(reg, slotsById) || 'senza-data';
+        return { day, path: openDayAttendancePath(reg, slotsById), kind: openDayAttendanceKind(reg, day, slotsById) };
+      });
+      const dates = [...new Set([
+        ...(state.dates || []).map(s => String(s.date || '').slice(0,10)).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)),
+        ...rows.map(r=>r.day)
+      ])].sort((a,b) => a === 'senza-data' ? 1 : b === 'senza-data' ? -1 : a.localeCompare(b));
+      const paths = [...new Set(rows.map(r=>r.path))].sort((a,b) => a.localeCompare(b, 'it'));
+      const daySelect = document.getElementById('attendanceDaySelect');
+      const pathSelect = document.getElementById('attendancePathSelect');
+      if (!daySelect || !pathSelect) return;
+      const previousDay = daySelect.value;
+      const previousPath = pathSelect.value;
+      // Opzioni create come nodi DOM: nessuna interpolazione di contenuto Firebase dentro HTML.
+      daySelect.replaceChildren(new Option('Tutte le giornate','all'), ...dates.map(d => new Option(openDayAttendanceDayText(d), d)));
+      pathSelect.replaceChildren(new Option('Tutti gli indirizzi','all'), ...paths.map(p => new Option(p,p)));
+      daySelect.value = dates.includes(previousDay) ? previousDay : 'all';
+      pathSelect.value = paths.includes(previousPath) ? previousPath : 'all';
+      const day = daySelect.value;
+      const path = pathSelect.value;
+      const filtered = rows.filter(r => (day === 'all' || r.day === day) && (path === 'all' || r.path === path));
+      const sum = openDayAttendanceTotals(filtered);
+      const updateText = (id, value) => { const el=document.getElementById(id); if(el) el.textContent=String(value); };
+      updateText('attendanceTotalEnrolled', sum.enrolled);
+      updateText('attendanceTotalEntered', sum.entered);
+      updateText('attendanceTotalAbsent', sum.absent);
+      updateText('attendanceTotalPending', sum.pending);
+      updateText('attendanceRateEntered', openDayAttendancePercent(sum.entered, sum.enrolled) + ' delle iscrizioni');
+      updateText('attendanceRateAbsent', openDayAttendancePercent(sum.absent, sum.enrolled) + ' delle iscrizioni');
+      updateText('attendanceRatePending', openDayAttendancePercent(sum.pending, sum.enrolled) + ' delle iscrizioni');
+      updateText('attendanceChartSummary', sum.enrolled
+        ? `${sum.enrolled} iscrizioni: ${sum.entered} entrati (${openDayAttendancePercent(sum.entered,sum.enrolled)}), ${sum.absent} assenti (${openDayAttendancePercent(sum.absent,sum.enrolled)}), ${sum.pending} da verificare (${openDayAttendancePercent(sum.pending,sum.enrolled)}).`
+        : 'Nessuna iscrizione confermata per i filtri selezionati.');
+
+      const cardsByDay = document.getElementById('attendanceDayCards');
+      const filteredDays = day === 'all' ? dates : [day];
+      if (cardsByDay) cardsByDay.innerHTML = filteredDays.length
+        ? filteredDays.map(d => openDayAttendanceMiniCard(openDayAttendanceDayText(d), openDayAttendanceTotals(filtered.filter(r=>r.day===d)), 'Giornata Open Day')).join('')
+        : '<p class="p-4 text-xs text-slate-500 font-bold">Nessuna data registrata.</p>';
+      const cardsByPath = document.getElementById('attendancePathCards');
+      const filteredPaths = path === 'all' ? paths : [path];
+      if (cardsByPath) cardsByPath.innerHTML = filteredPaths.length
+        ? filteredPaths.map(p => openDayAttendanceMiniCard(p, openDayAttendanceTotals(filtered.filter(r=>r.path===p)), 'Indirizzo di studio')).join('')
+        : '<p class="p-4 text-xs text-slate-500 font-bold">Nessun indirizzo disponibile.</p>';
+      const table = document.getElementById('attendanceBreakdownTable');
+      if (table) {
+        const combinations = [];
+        for (const d of filteredDays) for (const p of filteredPaths) {
+          const grouped = filtered.filter(r => r.day === d && r.path === p);
+          if (grouped.length) combinations.push({ day:d, path:p, sum:openDayAttendanceTotals(grouped) });
+        }
+        table.innerHTML = combinations.length ? `<table class="w-full text-left text-xs whitespace-nowrap"><thead class="bg-slate-50 uppercase text-[10px] tracking-wider text-slate-500 border-b border-slate-200"><tr><th class="p-3">Data</th><th class="p-3">Indirizzo</th><th class="p-3 text-center">Iscritti</th><th class="p-3 text-center">Entrati</th><th class="p-3 text-center">Assenti</th><th class="p-3 text-center">Da verificare</th></tr></thead><tbody>${combinations.map(x=>`<tr class="border-b border-slate-100 hover:bg-slate-50"><td class="p-3 font-extrabold text-indigo-900">${escWaitlist(openDayAttendanceDayText(x.day))}</td><td class="p-3 font-semibold text-slate-700">${escWaitlist(x.path)}</td><td class="p-3 text-center font-black">${x.sum.enrolled}</td><td class="p-3 text-center font-black text-emerald-700">${x.sum.entered} <span class="text-[10px] font-semibold text-slate-500">(${openDayAttendancePercent(x.sum.entered,x.sum.enrolled)})</span></td><td class="p-3 text-center font-black text-rose-700">${x.sum.absent} <span class="text-[10px] font-semibold text-slate-500">(${openDayAttendancePercent(x.sum.absent,x.sum.enrolled)})</span></td><td class="p-3 text-center font-black text-amber-700">${x.sum.pending} <span class="text-[10px] font-semibold text-slate-500">(${openDayAttendancePercent(x.sum.pending,x.sum.enrolled)})</span></td></tr>`).join('')}</tbody></table>` : '<p class="text-xs font-bold text-slate-500 p-4">Nessuna iscrizione per la combinazione di data e indirizzo scelta.</p>';
+      }
+      if (window.chartAttendanceInstance) { window.chartAttendanceInstance.destroy(); window.chartAttendanceInstance = null; }
+      const canvas = document.getElementById('attendanceMainChart');
+      if (canvas && typeof Chart !== 'undefined' && sum.enrolled) {
+        window.chartAttendanceInstance = new Chart(canvas, {
+          type: 'doughnut',
+          data: { labels: ['Entrati','Assenti','Da verificare'], datasets: [{ data: [sum.entered,sum.absent,sum.pending], backgroundColor: ['#10b981','#fb7185','#fbbf24'], borderColor: '#ffffff', borderWidth: 4, hoverOffset: 8 }] },
+          options: { responsive:true, maintainAspectRatio:false, cutout:'62%', plugins: { legend: { position:'bottom', labels: { boxWidth:13, padding:17, font:{ size:12, weight:'bold' } } }, tooltip: { callbacks: { label: context => `${context.label}: ${context.parsed} (${openDayAttendancePercent(context.parsed,sum.enrolled)})` } } } }
+        });
+      }
+    }
+    window.renderOpenDayAttendance = renderOpenDayAttendance;
+
     window.updateStatistics = updateStatistics;
 
     function startBookingProcess(sid) {
@@ -2940,7 +3254,28 @@
         const code = await uniqueOpenDayCode();
         const timestamp = Date.now();
         const regData = { code, cognome, nome, provenienza: toTitleCase(document.getElementById('formProvenienza').value.trim()), email, totalPeople, dateId: targetSession.id, studyPath: targetSession.studyPath, liceoPreference, dateStr: `${new Date(targetSession.date).toLocaleDateString('it-IT')} • ${targetSession.timeSlot}`, status: shouldWait ? 'Con riserva' : 'Iscritto', type: shouldWait ? WAITLIST_TYPE : ACTIVE_TYPE, inclusione: document.getElementById('formInclusione').checked, timestamp };
+        // Il worker Apps Script a browser chiuso può creare un PDF con QR senza
+        // chiamare generatori esterni che vedrebbero il codice di prenotazione.
+        try {
+          if (typeof QRious !== 'undefined') {
+            const qrCanvas = document.createElement('canvas');
+            new QRious({ element: qrCanvas, value: code, size: 220, level: 'H' });
+            regData.qrPngBase64 = qrCanvas.toDataURL('image/png').split(',')[1];
+          }
+        } catch (qrErr) { console.warn('Salvataggio QR opzionale per invio server:', qrErr); }
         if (shouldWait) Object.assign(regData, { waitlistRequestedAt: timestamp, waitlistStatus: 'Iscrizione con riserva', iscrizioneConRiserva: true, passSentDate: 'IN_CODA_Q1', passQueuedAt: timestamp }); else { regData.passSentDate = 'IN_CODA_Q1'; regData.passQueuedAt = timestamp; }
+        // Le iscrizioni effettuate negli ultimi N giorni prima del turno
+        // devono ricevere il promemoria anche se lo scatto 7 giorni prima
+        // era già avvenuto: lo accodiamo nel medesimo salvataggio atomico.
+        if (!shouldWait && targetSession.date) {
+          const firstTime = (String(targetSession.timeSlot||'').match(/\d{1,2}:\d{2}/)||['00:00'])[0];
+          const startDate = parseOpenDayLocalDate(targetSession.date, firstTime);
+          const remDays = Math.max(1, Number(window.promemoriaDays || 7));
+          if (startDate && startDate.getTime() > timestamp && startDate.getTime() - timestamp <= remDays * 86400000) {
+            regData.promemoriaSentDate = 'IN_CODA_Q2';
+            regData.promemoriaQueuedAt = timestamp;
+          }
+        }
         // Ultima scrittura atomica: il token di blocco deve ancora appartenere
         // a questa richiesta, altrimenti non si rischia un overbooking.
         await runTransaction(db, async tx => {
@@ -2982,6 +3317,17 @@ Preferenza: ${openDayLiceoPreferenceLabel(regData)}` : regData.studyPath; docume
         if (!messages[err.message]) setOpenDayBackendAlert(openDayErrorDescription(err, 'Prenotazione'));
       } finally {
         if (locked) await releaseOpenDayWaitlistLock(dateId);
+        if (saved && state.currentBooking?.code) {
+          const emailStatus = document.getElementById('confirmationEmailStatus');
+          if (emailStatus) emailStatus.textContent = 'Invio immediato del messaggio allo script in corso…';
+          const sendResult = await sendOpenDayImmediateEmail(state.currentBooking.code, 'pass');
+          if (emailStatus) emailStatus.textContent = sendResult.submitted
+            ? (isWaitlistRegistration(state.currentBooking)
+              ? 'Ricevuta di lista d’attesa inoltrata al servizio e-mail. Verifica anche Spam.'
+              : 'Pass inoltrato al servizio e-mail. Verifica la posta e anche Spam.')
+            : 'Prenotazione salvata. Il messaggio non risulta ancora inoltrato: contatta la scuola se non arriva.';
+          if (!sendResult.submitted) showToast('Prenotazione salvata, ma e-mail non ancora inoltrata: ' + (sendResult.reason || 'verificare la coda'), 'warning');
+        }
         submitBtn.dataset.saving = '0'; submitBtn.disabled = false;
         if (saved) setProgress(100, 'Prenotazione registrata nel database');
         else document.getElementById('bookingProgressContainer')?.classList.add('hidden');
@@ -3054,8 +3400,11 @@ Preferenza: ${openDayLiceoPreferenceLabel(regData)}` : regData.studyPath; docume
         const queuedAt = Date.now();
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', reg.code || reg.id), { passSentDate: 'IN_CODA_Q1', passQueuedAt: queuedAt, manualEmailRequestAt: queuedAt });
         Object.assign(reg, { passSentDate: 'IN_CODA_Q1', passQueuedAt: queuedAt, manualEmailRequestAt: queuedAt });
+        const sendResult = await sendOpenDayImmediateEmail(reg.code || reg.id, 'pass');
         const msg = document.getElementById('recoveryModalMessage');
-        if (msg) msg.textContent = isWaitlistRegistration(reg) ? 'Ricevuta di riserva inserita nella coda email.' : 'Pass di prenotazione inserito nella coda email.';
+        if (msg) msg.textContent = sendResult.submitted
+          ? (isWaitlistRegistration(reg) ? 'Ricevuta inoltrata allo script e-mail: controlla anche Spam.' : 'Pass inoltrato allo script e-mail: controlla anche Spam.')
+          : 'Richiesta salvata, ma messaggio non ancora inoltrato. Se non arriva, contatta la scuola.';
         document.getElementById('recoveryModalFormView').classList.add('hidden'); document.getElementById('recoveryModalSuccessView').classList.remove('hidden');
         window.renderRegistrations?.();
       } catch(err) { console.error('OpenDay recovery queue', err); showToast("Impossibile inserire il messaggio in coda: " + (err.message || err), "error"); }
@@ -3093,6 +3442,7 @@ Preferenza: ${openDayLiceoPreferenceLabel(regData)}` : regData.studyPath; docume
         // la scrittura, non mostriamo una falsa conferma di cancellazione.
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', reg.code), cancellationPatch);
         Object.assign(reg, cancellationPatch);
+        const cancellationSendResult = await sendOpenDayImmediateEmail(reg.code || reg.id, 'cancellazione');
         if (reg.dateId) {
           await promoteOpenDayWaitlist(reg.dateId).catch(err => console.warn('Scorrimento lista d’attesa dopo annullamento non riuscito', err));
           await closeOpenDayIfAdmissionEmailsSent(reg.dateId).catch(err => console.warn('Riconciliazione data dopo annullamento non riuscita', err));
@@ -3105,10 +3455,10 @@ Preferenza: ${openDayLiceoPreferenceLabel(regData)}` : regData.studyPath; docume
         const cancellationStillQueued = String(reg.cancellationEmailStatus || '').includes('IN_CODA') ||
           String(reg.cancellationEmailStatus || '').includes('ELABORAZIONE');
         const successText = document.querySelector('#cancelModalSuccessView p');
-        if (successText) successText.textContent = cancellationStillQueued
-          ? "La prenotazione è stata annullata e i posti sono stati liberati. La conferma e-mail è in coda e sarà ripresa quando il motore dell'Area Docenti sarà attivo."
-          : 'La prenotazione è stata annullata e i posti sono stati liberati. La conferma e-mail è stata inserita in coda.';
-        if (cancellationStillQueued) showToast('Annullamento registrato; conferma e-mail ancora in coda.', 'warning');
+        if (successText) successText.textContent = cancellationSendResult.submitted
+          ? 'La prenotazione è stata annullata e i posti liberati. La conferma è stata inoltrata allo script e-mail; controlla anche Spam.'
+          : 'La prenotazione è stata annullata e i posti liberati. La conferma e-mail è rimasta in coda: se non arriva, contatta la scuola.';
+        if (!cancellationSendResult.submitted) showToast('Annullamento registrato; conferma e-mail non ancora inoltrata.', 'warning');
         document.getElementById('cancelModalFormView').classList.add('hidden');
         document.getElementById('cancelModalSuccessView').classList.remove('hidden');
       } catch(err) {
@@ -3794,8 +4144,8 @@ Preferenza: ${openDayLiceoPreferenceLabel(regData)}` : regData.studyPath; docume
               document.getElementById('scannerSuccessOverlay').classList.remove('hidden');
               
               updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', qrData), { status: 'Ammesso', presenzaSentDate: 'IN_CODA_Q3', presenzaQueuedAt: Date.now() })
-                .then(() => window.SmartEmailEngine.flushNow())
-                .catch(e => console.error("Accodamento attestato ingresso non riuscito", e));
+                .then(() => sendOpenDayImmediateEmail(qrData, 'presenza'))
+                .catch(e => console.error("Invio immediato attestato ingresso non riuscito", e));
               
               const targetDateObj = state.dates.find(d => d.id === reg.dateId);
               let delayMs = 5 * 60 * 1000; 
@@ -3815,8 +4165,10 @@ Preferenza: ${openDayLiceoPreferenceLabel(regData)}` : regData.studyPath; docume
               }
 
               setTimeout(async () => {
-                 await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', qrData), { status: 'Concluso', pergamenaSentDate: 'IN_CODA_Q3', pergamenaQueuedAt: Date.now() });
-                 window.SmartEmailEngine.flushNow();
+                 try {
+                   await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', qrData), { status: 'Concluso', pergamenaSentDate: 'IN_CODA_Q3', pergamenaQueuedAt: Date.now() });
+                   await sendOpenDayImmediateEmail(qrData, 'pergamena');
+                 } catch (e) { console.error('Invio chiusura Open Day', e); }
               }, delayMs);
 
               setTimeout(() => { document.getElementById('scannerSuccessOverlay').classList.add('hidden'); lastScannedCode = null; window.SmartEmailEngine.flushNow(); }, 4000);
