@@ -16,6 +16,7 @@
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
   <!-- Libreria Grafici Statistiche -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
   <style>
     body { font-family: 'Plus Jakarta Sans', sans-serif; background: linear-gradient(135deg, #eef2ff 0%, #e0f2fe 50%, #ecfdf5 100%); overflow-x: hidden; min-height: 100vh; display: flex; flex-direction: column; }
@@ -463,9 +464,25 @@
 
       <!-- TAB REGISTRAZIONI -->
       <div id="tabRegistrations" class="space-y-4 hidden">
-        <div class="flex justify-between items-center">
-          <button onclick="window.exportToExcel()" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black shadow-sm flex items-center gap-2 uppercase tracking-wider transition"><i data-lucide="download" class="w-4 h-4"></i> Esporta CSV</button>
-          <select id="filterDateSelect" onchange="window.renderRegistrations()" class="p-2.5 border border-slate-200 rounded-xl text-xs font-bold shadow-sm outline-none bg-white text-slate-700"></select>
+        <div class="glass-card bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+          <div class="flex flex-wrap gap-3 justify-between items-center">
+            <div>
+              <h3 class="font-outfit font-black text-indigo-950 text-lg flex gap-2 items-center"><i data-lucide="list-filter" class="w-5 h-5 text-indigo-600"></i> Filtri rapidi del Registro</h3>
+              <p class="text-[11px] text-slate-500 font-semibold mt-1">I filtri si combinano fra loro. Il file Excel riporta soltanto i risultati visualizzati.</p>
+            </div>
+            <div class="flex gap-2 flex-wrap">
+              <button type="button" onclick="window.resetOpenDayRegisterFilters()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl text-xs font-black flex items-center gap-2 transition"><i data-lucide="rotate-ccw" class="w-4 h-4"></i> Azzera filtri</button>
+              <button type="button" onclick="window.exportToExcel()" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black shadow-sm flex items-center gap-2 uppercase tracking-wider transition"><i data-lucide="file-spreadsheet" class="w-4 h-4"></i> Esporta Excel filtrato</button>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            <div><label for="filterSurnameInput" class="text-[10px] block uppercase text-slate-500 font-black mb-1">Cerca per cognome</label><input id="filterSurnameInput" type="search" oninput="window.renderRegistrations()" placeholder="Es. Rossi" class="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-400" autocomplete="off"></div>
+            <div><label for="filterEmailInput" class="text-[10px] block uppercase text-slate-500 font-black mb-1">Cerca per e-mail</label><input id="filterEmailInput" type="search" oninput="window.renderRegistrations()" placeholder="Es. @gmail.com" class="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-400" autocomplete="off"></div>
+            <div><label for="filterStatusSelect" class="text-[10px] block uppercase text-slate-500 font-black mb-1">Stato iscrizione</label><select id="filterStatusSelect" onchange="window.renderRegistrations()" class="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-bold outline-none bg-white"><option value="all">Tutti gli stati</option><option value="iscritto">Iscritti confermati</option><option value="ammesso">Ammessi (non conclusi)</option><option value="entrati">Entrati (anche conclusi)</option><option value="concluso">Uscita conclusa</option><option value="assente">Assenti segnati</option><option value="attesa">In lista d'attesa</option><option value="annullato">Annullati</option></select></div>
+            <div><label for="filterDateSelect" class="text-[10px] block uppercase text-slate-500 font-black mb-1">Giorno / turno</label><select id="filterDateSelect" onchange="window.renderRegistrations()" class="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-bold shadow-sm outline-none bg-white text-slate-700"><option value="all">Tutti i turni</option></select></div>
+            <div><label for="filterPathSelect" class="text-[10px] block uppercase text-slate-500 font-black mb-1">Indirizzo</label><select id="filterPathSelect" onchange="window.renderRegistrations()" class="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-bold shadow-sm outline-none bg-white text-slate-700"><option value="all">Tutti gli indirizzi</option></select></div>
+          </div>
+          <p id="registerFilterSummary" role="status" aria-live="polite" class="text-xs font-black text-indigo-800 bg-indigo-50 border border-indigo-100 rounded-xl px-3 py-2">Caricamento iscrizioni…</p>
         </div>
         <div class="overflow-x-auto bg-white/90 backdrop-blur-md border border-slate-200 rounded-2xl shadow-sm">
           <table class="w-full text-left text-xs whitespace-nowrap">
@@ -603,6 +620,10 @@
 
       <!-- TAB STATISTICHE -->
       <div id="tabStatistics" class="hidden space-y-6">
+        <div class="glass-card bg-white border border-indigo-100 p-5 rounded-2xl flex flex-wrap gap-3 justify-between items-center">
+          <div><h3 class="font-outfit text-lg font-black text-indigo-950">Presenze suddivise per giornata</h3><p class="text-[11px] text-slate-600 font-semibold mt-1">Gli iscritti senza registrazione d'ingresso vengono conteggiati come non presentati <strong>solo a turno concluso</strong>. Le liste d'attesa e gli annullati sono esclusi.</p></div>
+          <div class="min-w-[220px]"><label for="statsDaySelect" class="block text-[10px] uppercase font-black text-slate-500 mb-1">Giornata da analizzare</label><select id="statsDaySelect" onchange="window.updateStatistics()" class="w-full bg-white p-3 rounded-xl border border-indigo-200 text-xs font-black text-indigo-900 outline-none focus:ring-2 focus:ring-indigo-400"><option value="all">Tutte le giornate</option></select></div>
+        </div>
         <div id="adminStatsGrid" class="grid grid-cols-2 lg:grid-cols-5 gap-4">
           <div class="glass-card p-4 rounded-2xl border border-slate-200 bg-white shadow-sm">
             <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Studenti Iscritti</span>
@@ -617,7 +638,7 @@
             <span class="text-xl font-black text-emerald-600" id="statTotalCertificati">0</span>
           </div>
           <div class="glass-card p-4 rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Assenti</span>
+            <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Assenti / non entrati</span>
             <span class="text-xl font-black text-rose-600" id="statTotalAssenti">0</span>
           </div>
           <div class="glass-card p-4 rounded-2xl border border-violet-200 bg-violet-50/50 shadow-sm">
@@ -626,14 +647,20 @@
           </div>
         </div>
 
+        <div class="glass-card p-5 rounded-3xl border border-slate-200 shadow-sm bg-white">
+          <h4 class="font-outfit font-black text-indigo-950 text-base mb-2">Confronto delle giornate Open Day</h4>
+          <p class="text-[11px] text-slate-500 font-semibold mb-3">Ogni colonna rappresenta una data distinta, sommando tutti i suoi turni e indirizzi. Numeri riferiti alle prenotazioni (alunni registrati), non ai posti per gli accompagnatori.</p>
+          <div class="relative w-full" style="height: 285px"><canvas id="chartGiornate"></canvas></div>
+          <div id="statsDaysTable" class="overflow-x-auto mt-4"></div>
+        </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
            <div class="glass-card p-6 rounded-3xl border border-slate-200 shadow-sm bg-white flex flex-col">
-             <h4 class="font-outfit font-black text-indigo-950 text-base border-b pb-2 mb-4"><i data-lucide="pie-chart" class="w-4 h-4 inline text-indigo-600 mr-1"></i> Ripartizione per Indirizzo</h4>
+             <h4 class="font-outfit font-black text-indigo-950 text-base border-b pb-2 mb-4"><i data-lucide="pie-chart" class="w-4 h-4 inline text-indigo-600 mr-1"></i> Ripartizione per Indirizzo (giornata selezionata)</h4>
              <div class="relative w-full h-64 flex-grow"><canvas id="chartIndirizzi"></canvas></div>
              <p id="statsTextIndirizzi" class="text-xs text-slate-600 mt-4 font-semibold text-center bg-slate-50 p-3 rounded-xl border border-slate-100"></p>
            </div>
            <div class="glass-card p-6 rounded-3xl border border-slate-200 shadow-sm bg-white flex flex-col">
-             <h4 class="font-outfit font-black text-indigo-950 text-base border-b pb-2 mb-4"><i data-lucide="bar-chart-2" class="w-4 h-4 inline text-indigo-600 mr-1"></i> Andamento Partecipazione</h4>
+             <h4 class="font-outfit font-black text-indigo-950 text-base border-b pb-2 mb-4"><i data-lucide="bar-chart-2" class="w-4 h-4 inline text-indigo-600 mr-1"></i> Presenze e Assenze (giornata selezionata)</h4>
              <div class="relative w-full h-64 flex-grow"><canvas id="chartStato"></canvas></div>
              <p id="statsTextPartecipazione" class="text-xs text-slate-600 mt-4 font-semibold text-center bg-slate-50 p-3 rounded-xl border border-slate-100"></p>
            </div>
@@ -866,6 +893,7 @@
     // Fissate le istanze dei grafici come variabili globali di window per evitare errori di scope in transpilation/compilation
     window.chartIndirizziInstance = null;
     window.chartStatoInstance = null;
+    window.chartGiornateInstance = null;
     let myIpAddress = "IP Nascosto";
 
     fetch('https://api.ipify.org?format=json').then(r=>r.json()).then(d=>{ myIpAddress = d.ip; }).catch(e=>{});
@@ -1660,11 +1688,12 @@
           requestMayHaveReachedGoogle = true;
           if (!result || result.ok !== true) throw new Error('Il browser non ha completato la richiesta verso Google Apps Script.');
 
-          const sentAt = new Date().toLocaleString('it-IT');
           const sentAtMs = Date.now();
           const sentUpdate = {
             // La risposta no-cors è OPACA: NON significa email consegnata.
             [field]: 'VERIFICA_INVIO',
+            // Timestamp individuale: pass, promemoria, ingresso e uscita restano distinguibili.
+            [`${item.type}SubmittedAt`]: sentAtMs,
             emailProcessingAt: null,
             lastEmailError: 'Richiesta inoltrata a Google Apps Script; verificare il registro esecuzioni/posta inviata prima di un reinvio.',
             lastEmailSubmittedAt: sentAtMs,
@@ -2059,6 +2088,7 @@
         });
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', reg.code), {
           passSentDate: new Date().toLocaleString('it-IT'),
+          passSubmittedAt: Date.now(),
           waitlistPromotionEmailSentAt: Date.now()
         }).catch(() => {});
       } catch (e) {
@@ -2344,7 +2374,7 @@
     function toggleAdminPanel() { state.currentView === 'admin' ? window.navigateTo('home') : window.navigateTo('admin'); }
     window.toggleAdminPanel = toggleAdminPanel;
 
-    function switchAdminTab(id) { ['tabRegistrations','tabLiveScanner','tabSettings','tabStatistics','tabSmartEmail','tabWaitlist'].forEach(t => document.getElementById(t)?.classList.add('hidden')); ensureOpenDayWaitlistAdminUI(); document.getElementById(id)?.classList.remove('hidden'); if(id === 'tabWaitlist') renderOpenDayWaitlistAdmin(); }
+    function switchAdminTab(id) { ['tabRegistrations','tabLiveScanner','tabSettings','tabStatistics','tabSmartEmail','tabWaitlist'].forEach(t => document.getElementById(t)?.classList.add('hidden')); ensureOpenDayWaitlistAdminUI(); document.getElementById(id)?.classList.remove('hidden'); if(id === 'tabWaitlist') renderOpenDayWaitlistAdmin(); if(id === 'tabStatistics') requestAnimationFrame(() => window.updateStatistics()); }
     window.switchAdminTab = switchAdminTab;
     
     function openRecoveryModal() { document.getElementById('recoveryModalFormView').classList.remove('hidden'); document.getElementById('recoveryModalSuccessView').classList.add('hidden'); document.getElementById('recoveryModal').classList.remove('hidden'); }
@@ -2381,7 +2411,7 @@
         // quando un amministratore ha eliminato tutte le date.
         s.forEach(d => { const raw = {id: d.id, ...d.data()}; state.dates.push({...raw, studyPath: canonicalOpenDayStudyPath(raw.studyPath)}); });
         window.renderHomeDates();
-        if (state.currentView === 'admin') window.renderAdminDatesList();
+        if (state.currentView === 'admin') { window.renderAdminDatesList(); window.renderRegistrations(); window.updateStatistics(); }
         populateFilters();
         scheduleOpenDayWaitlistReconcile();
         setOpenDayBackendAlert('');
@@ -2394,7 +2424,7 @@
         s.forEach(d => { const raw = {id: d.id, ...d.data()}; state.registrations.push({...raw, studyPath: canonicalOpenDayStudyPath(raw.studyPath)}); });
         openDayRegistrationsRealtimeReady = true;
         window.renderHomeDates(); 
-        if (state.currentView === 'admin') { window.renderRegistrations(); window.updateStatistics(); window.renderAdminDatesList(); renderOpenDayWaitlistAdmin(); }
+        if (state.currentView === 'admin') { populateFilters(); window.renderRegistrations(); window.updateStatistics(); window.renderAdminDatesList(); renderOpenDayWaitlistAdmin(); }
         scheduleOpenDayWaitlistReconcile();
       }, error => {
         console.error('Iscrizioni Firestore', error);
@@ -2422,15 +2452,25 @@
 
     function populateFilters() {
       const adminFilter = document.getElementById('filterDateSelect');
+      const adminPath = document.getElementById('filterPathSelect');
       const userPathFilter = document.getElementById('userPathFilter');
-      if(adminFilter) {
-        adminFilter.innerHTML = '<option value="all">Tutti i turni</option>';
-        state.dates.forEach(d => adminFilter.innerHTML += `<option value="${d.id}">${new Date(d.date).toLocaleDateString('it-IT')} - ${d.timeSlot}</option>`);
+      if (adminFilter) {
+        const keep = adminFilter.value || 'all';
+        const dates = [...state.dates].sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.timeSlot).localeCompare(String(b.timeSlot)));
+        adminFilter.innerHTML = '<option value="all">Tutti i turni</option>' + dates.map(d => `<option value="${escWaitlist(d.id)}">${escWaitlist(new Date(String(d.date) + 'T12:00:00').toLocaleDateString('it-IT'))} · ${escWaitlist(d.timeSlot)} · ${escWaitlist((d.studyPath || '').split(' - ')[0])}</option>`).join('');
+        if ([...adminFilter.options].some(o => o.value === keep)) adminFilter.value = keep;
       }
-      if(userPathFilter) {
-        const paths = [...new Set(state.dates.map(d => d.studyPath))].sort();
-        userPathFilter.innerHTML = '<option value="all">Tutti gli indirizzi disponibili</option>';
-        paths.forEach(p => userPathFilter.innerHTML += `<option value="${p}">${p}</option>`);
+      if (adminPath) {
+        const keep = adminPath.value || 'all';
+        const paths = [...new Set([...state.dates, ...state.registrations].map(x => x.studyPath).filter(Boolean))].sort();
+        adminPath.innerHTML = '<option value="all">Tutti gli indirizzi</option>' + paths.map(p => `<option value="${escWaitlist(p)}">${escWaitlist(p)}</option>`).join('');
+        if ([...adminPath.options].some(o => o.value === keep)) adminPath.value = keep;
+      }
+      if (userPathFilter) {
+        const keep = userPathFilter.value || 'all';
+        const paths = [...new Set(state.dates.map(d => d.studyPath).filter(Boolean))].sort();
+        userPathFilter.innerHTML = '<option value="all">Tutti gli indirizzi disponibili</option>' + paths.map(p => `<option value="${escWaitlist(p)}">${escWaitlist(p)}</option>`).join('');
+        if ([...userPathFilter.options].some(o => o.value === keep)) userPathFilter.value = keep;
       }
     }
 
@@ -2483,60 +2523,134 @@
     }
     window.renderHomeDates = renderHomeDates;
 
+    // Ricava la data della prenotazione anche per eventi storici non più presenti
+    // nel calendario, senza fare query aggiuntive su Firestore.
+    function openDayStatsRegistrationDay(r, slotsById) {
+      const slot = slotsById.get(String(r.dateId || ''));
+      if (slot?.date && /^\d{4}-\d{2}-\d{2}/.test(String(slot.date))) return String(slot.date).slice(0, 10);
+      const raw = String(r.eventDate || r.dateStr || '');
+      const iso = raw.match(/\b(20\d{2})-(\d{2})-(\d{2})\b/);
+      if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+      const italian = raw.match(/\b(\d{1,2})\/(\d{1,2})\/(20\d{2})\b/);
+      return italian ? `${italian[3]}-${italian[2].padStart(2,'0')}-${italian[1].padStart(2,'0')}` : '';
+    }
+
+    function openDayStatsDayLabel(day) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return 'Data non disponibile';
+      return new Date(`${day}T12:00:00`).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    }
+
+    function openDayStatsSessionFinished(r, day, slotsById) {
+      const slot = slotsById.get(String(r.dateId || ''));
+      if (slot) return openDaySlotFinished(slot);
+      // Turno storico cancellato: e' possibile dichiararlo concluso solo
+      // se e' trascorsa per intero la relativa giornata.
+      return !!day && day < openDayRomeParts().day;
+    }
+
     function updateStatistics() {
       const ctxIndirizzi = document.getElementById('chartIndirizzi');
       const ctxStato = document.getElementById('chartStato');
-      if (!ctxIndirizzi || !ctxStato) return;
+      const ctxGiornate = document.getElementById('chartGiornate');
+      if (!ctxIndirizzi || !ctxStato || !ctxGiornate) return;
 
-      const pathsCount = {};
-      const statusCount = { 'Iscritto': 0, 'Ammesso': 0, 'Concluso': 0, 'Assente': 0 };
-      let totalPeople = 0;
-      let totalInclusione = 0;
-      const activeStatsRegistrations = state.registrations.filter(r => !isWaitlistRegistration(r));
-
-      activeStatsRegistrations.forEach(r => {
-         const p = r.studyPath.split(' - ')[0] || r.studyPath; 
-         pathsCount[p] = (pathsCount[p] || 0) + parseInt(r.totalPeople || 1);
-         if(statusCount[r.status] !== undefined) statusCount[r.status]++;
-         totalPeople += parseInt(r.totalPeople || 1);
-         if(r.inclusione) totalInclusione++;
-      });
-
-      const iscrittiEl = document.getElementById('statTotalIscritti');
-      if (iscrittiEl) {
-        iscrittiEl.innerText = activeStatsRegistrations.length;
-        document.getElementById('statTotalEntrati').innerText = statusCount['Ammesso'];
-        document.getElementById('statTotalCertificati').innerText = statusCount['Concluso'];
-        document.getElementById('statTotalAssenti').innerText = statusCount['Assente'];
-        document.getElementById('statTotalInclusione').innerText = totalInclusione;
+      const slotsById = new Map(state.dates.map(s => [String(s.id), s]));
+      const statsRows = (state.registrations || [])
+        .filter(isSeatActiveRegistration)
+        .map(r => ({ reg: r, day: openDayStatsRegistrationDay(r, slotsById) }));
+      const daySet = new Set([
+        ...state.dates.map(s => String(s.date || '').slice(0, 10)).filter(s => /^\d{4}-\d{2}-\d{2}$/.test(s)),
+        ...statsRows.map(x => x.day).filter(Boolean)
+      ]);
+      const days = [...daySet].sort();
+      const selector = document.getElementById('statsDaySelect');
+      let selectedDay = selector?.value || 'all';
+      if (selector) {
+        selector.innerHTML = '<option value="all">Tutte le giornate</option>' + days.map(day => `<option value="${day}">${openDayStatsDayLabel(day)}</option>`).join('');
+        if (selectedDay !== 'all' && !daySet.has(selectedDay)) selectedDay = 'all';
+        selector.value = selectedDay;
       }
 
-      let maxPath = "-"; let maxVal = 0;
-      for (const [p, v] of Object.entries(pathsCount)) { if (v > maxVal) { maxVal = v; maxPath = p; } }
-      const totalRegistrations = activeStatsRegistrations.length;
-      const presenti = statusCount['Ammesso'] + statusCount['Concluso'];
-      const tassoPresenza = totalRegistrations > 0 ? Math.round((presenti / totalRegistrations) * 100) : 0;
+      function classify(r, day) {
+        const status = normalizeWaitlistText(r.status);
+        if (status === 'ammesso' || status === 'concluso') return 'present';
+        if (status === 'assente') return 'absent';
+        if (status === 'iscritto' || status === 'iscrizione confermata')
+          return openDayStatsSessionFinished(r, day, slotsById) ? 'absent' : 'pending';
+        return 'pending'; // Stato non riconoscibile: non inventare assenze.
+      }
 
+      const aggregates = new Map(days.map(day => [day, { day, enrolled: 0, entered: 0, completed: 0, present: 0, absent: 0, pending: 0, inclusion: 0, waiting: 0 }]));
+      statsRows.forEach(({reg, day}) => {
+        if (!aggregates.has(day)) return;
+        const item = aggregates.get(day);
+        item.enrolled++;
+        if (reg.inclusione) item.inclusion++;
+        const classification = classify(reg, day);
+        item[classification]++;
+        if (normalizeWaitlistText(reg.status) === 'ammesso') item.entered++;
+        if (normalizeWaitlistText(reg.status) === 'concluso') item.completed++;
+      });
+      (state.registrations || []).filter(isWaitlistRegistration).forEach(r => {
+        const day = openDayStatsRegistrationDay(r, slotsById);
+        if (aggregates.has(day)) aggregates.get(day).waiting++;
+      });
+
+      const selectedRows = statsRows.filter(x => selectedDay === 'all' || x.day === selectedDay);
+      const selectedTotals = { enrolled: selectedRows.length, entered: 0, completed: 0, present: 0, absent: 0, pending: 0, inclusion: 0 };
+      const pathsCount = {};
+      selectedRows.forEach(({reg,day}) => {
+        const status = normalizeWaitlistText(reg.status);
+        const outcome = classify(reg, day);
+        selectedTotals[outcome]++;
+        if (status === 'ammesso') selectedTotals.entered++;
+        if (status === 'concluso') selectedTotals.completed++;
+        if (reg.inclusione) selectedTotals.inclusion++;
+        const path = String(reg.studyPath || 'Non specificato').split(' - ')[0];
+        pathsCount[path] = (pathsCount[path] || 0) + seatsOf(reg);
+      });
+      const setStat = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = String(value); };
+      setStat('statTotalIscritti', selectedTotals.enrolled);
+      setStat('statTotalEntrati', selectedTotals.present); // Comprende chi ha già completato l'uscita.
+      setStat('statTotalCertificati', selectedTotals.completed);
+      setStat('statTotalAssenti', selectedTotals.absent);
+      setStat('statTotalInclusione', selectedTotals.inclusion);
+
+      const daily = [...aggregates.values()];
+      const daysTable = document.getElementById('statsDaysTable');
+      if (daysTable) {
+        daysTable.innerHTML = daily.length ? `<table class="w-full text-left text-xs border border-slate-200 rounded-xl overflow-hidden"><thead><tr class="bg-slate-50 text-slate-600 uppercase text-[10px]"><th class="p-3">Data</th><th class="p-3 text-center">Iscritti</th><th class="p-3 text-center">Presenti</th><th class="p-3 text-center">Non entrati</th><th class="p-3 text-center">In attesa</th><th class="p-3 text-center">Lista attesa</th><th class="p-3 text-center">Presenza*</th></tr></thead><tbody>${daily.map(x => `<tr class="border-t border-slate-100 ${selectedDay===x.day ? 'bg-indigo-50' : 'hover:bg-slate-50'}"><td class="p-3 font-black"><button type="button" onclick="window.selectOpenDayStatsDay('${x.day}')" class="text-indigo-700 hover:underline">${openDayStatsDayLabel(x.day)}</button></td><td class="p-3 text-center font-bold">${x.enrolled}</td><td class="p-3 text-center font-black text-emerald-700">${x.present}</td><td class="p-3 text-center font-black text-rose-700">${x.absent}</td><td class="p-3 text-center font-bold text-amber-700">${x.pending}</td><td class="p-3 text-center font-bold text-violet-700">${x.waiting}</td><td class="p-3 text-center font-black">${x.present+x.absent ? Math.round(x.present/(x.present+x.absent)*100)+'%' : '—'}</td></tr>`).join('')}</tbody></table><p class="text-[10px] text-slate-500 mt-2 font-semibold">* Tasso calcolato sui turni già accreditati o conclusi, e sugli iscritti senza ingresso nei turni conclusi. Le iscrizioni dei turni futuri/in corso non sono assenze.</p>` : '<p class="text-xs text-slate-500 font-bold p-4">Nessuna giornata disponibile nel calendario o nello storico delle iscrizioni.</p>';
+      }
+      const mostRequested = Object.entries(pathsCount).sort((a,b)=>b[1]-a[1])[0];
       const txtIndirizzi = document.getElementById('statsTextIndirizzi');
-      if(txtIndirizzi) txtIndirizzi.innerHTML = `L'indirizzo più richiesto attualmente è <strong>${maxPath}</strong> con <strong>${maxVal}</strong> posti totali bloccati.`;
-      
+      if (txtIndirizzi) txtIndirizzi.textContent = mostRequested ? `Indirizzo più richiesto: ${mostRequested[0]} (${mostRequested[1]} posti complessivi, inclusi gli accompagnatori).` : 'Nessuna iscrizione per la selezione.';
       const txtPartecipazione = document.getElementById('statsTextPartecipazione');
-      if(txtPartecipazione) txtPartecipazione.innerHTML = `Tasso di affluenza reale in sede del <strong>${tassoPresenza}%</strong>. Sono stati erogati ad oggi <strong>${statusCount['Concluso']}</strong> certificati.`;
+      if (txtPartecipazione) txtPartecipazione.textContent = `${selectedTotals.present} presenti, ${selectedTotals.absent} assenti/non entrati a turno concluso, ${selectedTotals.pending} ancora da verificare. Le assenze sono calcolate in base alle registrazioni d'ingresso effettuate dalla scuola.`;
 
-      if(window.chartIndirizziInstance) window.chartIndirizziInstance.destroy();
+      if (typeof Chart === 'undefined') return;
+      if (window.chartGiornateInstance) window.chartGiornateInstance.destroy();
+      window.chartGiornateInstance = new Chart(ctxGiornate, {
+        type: 'bar',
+        data: { labels: daily.map(x => openDayStatsDayLabel(x.day)), datasets: [
+          { label: 'Presenti', data: daily.map(x=>x.present), backgroundColor: '#10b981', borderRadius: 4 },
+          { label: 'Assenti / non entrati', data: daily.map(x=>x.absent), backgroundColor: '#fb7185', borderRadius: 4 },
+          { label: 'Ancora da verificare', data: daily.map(x=>x.pending), backgroundColor: '#fbbf24', borderRadius: 4 }
+        ] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } }, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } } }, onClick: (_, elements) => { if (elements.length && daily[elements[0].index]) window.selectOpenDayStatsDay(daily[elements[0].index].day); } }
+      });
+      if (window.chartIndirizziInstance) window.chartIndirizziInstance.destroy();
       window.chartIndirizziInstance = new Chart(ctxIndirizzi, {
-        type: 'doughnut',
-        data: { labels: Object.keys(pathsCount), datasets: [{ data: Object.values(pathsCount), backgroundColor: ['#4f46e5', '#10b981', '#f59e0b', '#14b8a6', '#d946ef', '#3b82f6'] }] },
+        type: 'doughnut', data: { labels: Object.keys(pathsCount), datasets: [{ data: Object.values(pathsCount), backgroundColor: ['#4f46e5', '#10b981', '#f59e0b', '#14b8a6', '#d946ef', '#3b82f6'] }] },
         options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { font: { size: 10 } } } } }
       });
-
-      if(window.chartStatoInstance) window.chartStatoInstance.destroy();
+      if (window.chartStatoInstance) window.chartStatoInstance.destroy();
       window.chartStatoInstance = new Chart(ctxStato, {
-        type: 'bar',
-        data: { labels: Object.keys(statusCount), datasets: [{ label: 'Studenti', data: Object.values(statusCount), backgroundColor: ['#6366f1', '#3b82f6', '#10b981', '#f43f5e'], borderRadius: 6 }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+        type: 'bar', data: { labels: ['Presenti', 'Assenti / non entrati', 'Da verificare'], datasets: [{ label: 'Prenotazioni', data: [selectedTotals.present, selectedTotals.absent, selectedTotals.pending], backgroundColor: ['#10b981', '#fb7185', '#fbbf24'], borderRadius: 6 }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
       });
     }
+    window.selectOpenDayStatsDay = (day) => { const el = document.getElementById('statsDaySelect'); if (el) { el.value = day; window.updateStatistics(); } };
+
     window.updateStatistics = updateStatistics;
 
     function startBookingProcess(sid) {
@@ -2934,64 +3048,108 @@ Preferenza: ${openDayLiceoPreferenceLabel(regData)}` : regData.studyPath; docume
     }
     window.saveEditDate = saveEditDate;
 
+    function getOpenDayFilteredRegistrations() {
+      const session = document.getElementById('filterDateSelect')?.value || 'all';
+      const surname = normalizeWaitlistText(document.getElementById('filterSurnameInput')?.value);
+      const email = normalizeWaitlistText(document.getElementById('filterEmailInput')?.value);
+      const status = document.getElementById('filterStatusSelect')?.value || 'all';
+      const path = document.getElementById('filterPathSelect')?.value || 'all';
+      return (state.registrations || []).filter(r => {
+        if (session !== 'all' && r.dateId !== session) return false;
+        if (path !== 'all' && r.studyPath !== path) return false;
+        if (surname && !normalizeWaitlistText(r.cognome).includes(surname)) return false;
+        if (email && !normalizeWaitlistText(r.email).includes(email)) return false;
+        const isWaiting = isWaitlistRegistration(r);
+        const code = normalizeWaitlistText(r.status);
+        switch (status) {
+          case 'attesa': if (!isWaiting) return false; break;
+          case 'entrati': if (isWaiting || !['ammesso','concluso'].includes(code)) return false; break;
+          case 'iscritto': case 'ammesso': case 'concluso': case 'assente': case 'annullato':
+            if (isWaiting || code !== status) return false;
+            break;
+        }
+        return true;
+      }).sort((a,b) => String(a.cognome || '').localeCompare(String(b.cognome || ''), 'it', { sensitivity: 'base' }) || String(a.nome || '').localeCompare(String(b.nome || ''), 'it', { sensitivity: 'base' }));
+    }
+
+    function openDayEmailTimestamp(value) {
+      if (!value) return '';
+      let date;
+      if (typeof value === 'number' || /^\d{12,14}$/.test(String(value))) {
+        date = new Date(Number(value));
+      } else if (typeof value === 'string') {
+        const m = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:,?\s+(\d{1,2}):(\d{2}))?/);
+        if (m) date = new Date(Number(m[3]), Number(m[2])-1, Number(m[1]), Number(m[4] || 0), Number(m[5] || 0));
+        else if (/^\d{4}-\d{2}-\d{2}/.test(value)) date = new Date(value);
+      }
+      if (!date || !Number.isFinite(date.getTime())) return '';
+      const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(date);
+      const get = k => parts.find(p => p.type === k)?.value || '';
+      return `${get('day')}/${get('month')}/${get('year')} ${get('hour')}:${get('minute')}`;
+    }
+
+    function openDayEmailDisplay(reg, type) {
+      const defs = {pass:['passSentDate','passQueuedAt'],promemoria:['promemoriaSentDate','promemoriaQueuedAt'],presenza:['presenzaSentDate','presenzaQueuedAt'],pergamena:['pergamenaSentDate','pergamenaQueuedAt']};
+      const [field, queueField] = defs[type] || [];
+      if (!field) return '—';
+      const status = String(reg[field] || '');
+      const lastKnown = reg.lastEmailRequestId && String(reg.lastEmailRequestId).startsWith(`${reg.code || reg.id}_${type}_`) ? reg.lastEmailSubmittedAt : null;
+      const submitted = openDayEmailTimestamp(reg[`${type}SubmittedAt`] || lastKnown);
+      const oldSavedDate = openDayEmailTimestamp(status);
+      const queued = openDayEmailTimestamp(reg[queueField]);
+      if (status.includes('IN_CODA')) return `<span class="text-amber-700 font-black">In coda${queued ? ' · '+queued : ''}</span>`;
+      if (status.includes('ELABORAZIONE')) return '<span class="text-amber-700 font-black">Invio in corso</span>';
+      if (status === 'VERIFICA_INVIO') return submitted
+        ? `<span class="text-indigo-800 font-black" title="Inoltro a Google Apps Script: non certifica la consegna al destinatario">Inoltrata<br><time>${submitted}</time></span>`
+        : '<span class="text-indigo-700 font-bold" title="La richiesta era stata inoltrata, ma non esiste un orario attribuibile a questa specifica comunicazione">Inoltrata<br>Orario non registrato</span>';
+      if (submitted || oldSavedDate) return `<span class="text-indigo-800 font-black" title="Orario registrato dal sistema, non ricevuta di consegna">Registrata<br><time>${submitted || oldSavedDate}</time></span>`;
+      if (status) return `<span class="text-rose-700 font-bold" title="${escWaitlist(status)}">${status.includes('RETRY') ? 'Da ritentare' : 'Non completata'}</span>`;
+      return '<span class="text-slate-400">Mai</span>';
+    }
+
+    function resetOpenDayRegisterFilters() {
+      ['filterDateSelect','filterPathSelect','filterStatusSelect'].forEach(id => { const el = document.getElementById(id); if(el) el.value='all'; });
+      ['filterSurnameInput','filterEmailInput'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+      window.renderRegistrations();
+    }
+    window.resetOpenDayRegisterFilters = resetOpenDayRegisterFilters;
+
     function renderRegistrations() {
       const tbody = document.getElementById('registrationsTableBody');
-      if(!tbody) return;
-      const f = document.getElementById('filterDateSelect')?.value || 'all';
-      const list = f === 'all' ? state.registrations : state.registrations.filter(r => r.dateId === f);
-      
-      list.sort((a,b) => a.cognome.localeCompare(b.cognome));
-
+      if (!tbody) return;
+      const list = getOpenDayFilteredRegistrations();
+      const info = document.getElementById('registerFilterSummary');
+      if (info) info.textContent = `Visualizzate ${list.length} iscrizioni su ${(state.registrations || []).length} · ${list.reduce((sum,r) => sum + seatsOf(r), 0)} posti richiesti · ${list.filter(isWaitlistRegistration).length} in lista d'attesa. Il file Excel conterrà solo queste righe.`;
       tbody.innerHTML = list.map(r => {
-        const fmtDate = (dString) => {
-            if(!dString || dString === 'Mai') return 'Mai';
-            if(dString.includes('IN_CODA') || dString.includes('ELAB')) return '<span class="text-amber-500 font-black">IN CODA</span>';
-            if(dString === 'VERIFICA_INVIO') return '<span class="text-violet-700 font-black">VERIFICA INVIO</span>';
-            try { let d = new Date(dString.split(', ')[0].split('/').reverse().join('-') + 'T' + dString.split(', ')[1]); return `${d.getDate().toString().padStart(2,'0')}/${(d.getMonth()+1).toString().padStart(2,'0')} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`; } catch(e){ return dString;}
-        };
-        return `
-        <tr id="riga-${r.code}" class="border-b border-slate-100 hover:bg-slate-50 transition text-xs font-semibold text-slate-700">
-          <td class="p-4 align-top">
-            <div class="font-mono font-bold text-indigo-600 text-sm">${r.code}</div>
-            <div class="text-[10px] text-slate-500 font-bold mt-1 bg-slate-200 inline-block px-2 py-0.5 rounded cella-stato">${r.status || 'Iscritto'}</div>
-          </td>
-          <td class="p-4 align-top font-black text-slate-900">${r.cognome.toUpperCase()} <br> ${r.nome.toUpperCase()}</td>
-          <td class="p-4 text-xs align-top">
-            <div class="font-semibold text-slate-700">${r.email}</div>
-            <div class="text-[11px] text-slate-600 font-bold mt-1">Posti: ${r.totalPeople} | Scuola: ${r.provenienza}</div>
-          </td>
-          <td class="p-4 text-xs align-top">
-            <div class="font-bold text-slate-800 text-[10px] truncate max-w-[150px] whitespace-normal" title="${r.studyPath}">${r.studyPath}</div>
-            ${openDayLiceoPreferenceLabel(r) ? `<div class="text-[10px] text-emerald-700 font-black mt-1 whitespace-normal max-w-[180px]">${openDayLiceoPreferenceLabel(r)}</div>` : ''}
-            <div class="text-[11px] text-indigo-600 font-black mt-1">${r.dateStr}</div>
-          </td>
-          <td class="p-4 text-center align-top"><input type="checkbox" disabled ${r.inclusione ? 'checked' : ''} class="w-4 h-4 rounded text-violet-600 focus:ring-violet-500 bg-white border-slate-300"></td>
-          <td class="p-4 text-center align-top">
-            <select onchange="window.updateDocField('${r.code}', 'status', this.value)" class="p-2 border border-slate-300 rounded-lg text-xs bg-white outline-none font-bold text-slate-800 shadow-sm cursor-pointer w-24">
+        const code = escWaitlist(r.code || r.id);
+        const statusLabel = isWaitlistRegistration(r) ? 'In lista d’attesa' : (r.status || 'Iscritto');
+        const statusEditor = isWaitlistRegistration(r) ? `<span class="text-[10px] font-black text-violet-700 bg-violet-50 p-2 rounded-lg block whitespace-normal w-32">In attesa di posto: gestione dalla Lista d'attesa</span>` :
+          `<select onchange="window.updateDocField('${code}', 'status', this.value)" class="p-2 border border-slate-300 rounded-lg text-xs bg-white outline-none font-bold text-slate-800 shadow-sm cursor-pointer w-28">
               <option value="Iscritto" ${r.status==='Iscritto'?'selected':''}>Iscritto</option>
               <option value="Ammesso" ${r.status==='Ammesso'?'selected':''}>Ammesso</option>
               <option value="Concluso" ${r.status==='Concluso'?'selected':''}>Concluso</option>
               <option value="Assente" ${r.status==='Assente'?'selected':''}>Assente</option>
-            </select>
-          </td>
-          <td class="p-4 text-center align-top">
-            <div class="flex flex-col gap-1.5 w-[140px] mx-auto text-left">
-              <button onclick="window.triggerEmailQueue('${r.code}','pass')" class="bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-800 px-2 py-1.5 rounded-lg text-[9px] font-black flex justify-between items-center transition cursor-pointer"><span>1. Pass</span><span class="font-mono text-[9px] opacity-80">${fmtDate(r.passSentDate)}</span></button>
-              <button onclick="window.triggerEmailQueue('${r.code}','promemoria')" class="bg-amber-50 border border-amber-200 hover:bg-amber-100 text-amber-800 px-2 py-1.5 rounded-lg text-[9px] font-black flex justify-between items-center transition cursor-pointer"><span>2. P.Moria</span><span class="font-mono text-[9px] opacity-80">${fmtDate(r.promemoriaSentDate)}</span></button>
-              <button onclick="window.triggerEmailQueue('${r.code}','presenza')" class="bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-800 px-2 py-1.5 rounded-lg text-[9px] font-black flex justify-between items-center transition cursor-pointer"><span>3. Ingr.</span><span class="font-mono text-[9px] opacity-80">${fmtDate(r.presenzaSentDate)}</span></button>
-              <button onclick="window.triggerEmailQueue('${r.code}','pergamena')" class="bg-violet-50 border border-violet-200 hover:bg-violet-100 text-violet-800 px-2 py-1.5 rounded-lg text-[9px] font-black flex justify-between items-center transition cursor-pointer"><span>4. Uscita</span><span class="font-mono text-[9px] opacity-80">${fmtDate(r.pergamenaSentDate)}</span></button>
-            </div>
-          </td>
-          <td class="p-4 text-right align-top">
-            <div class="flex flex-col gap-2">
-              <button onclick="window.openEditRegModal('${r.code}')" class="p-2.5 text-sky-600 bg-sky-50 hover:bg-sky-100 rounded-lg transition border border-transparent hover:border-sky-200 flex items-center justify-center cursor-pointer"><i data-lucide="edit" class="w-4 h-4"></i></button>
-              <button onclick="window.triggerManualDelete('${r.code}')" class="p-2.5 text-rose-500 bg-rose-50 hover:bg-rose-100 rounded-lg transition border border-transparent hover:border-rose-200 flex items-center justify-center cursor-pointer"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-            </div>
-          </td>
-        </tr>
-      `}).join('');
-      try{ lucide.createIcons(); } catch(e){}
+            </select>`;
+        const communicationButtons = [
+          ['pass', '1. Pass', 'bg-indigo-50 border-indigo-200 hover:bg-indigo-100 text-indigo-800'],
+          ['promemoria', '2. Promemoria', 'bg-amber-50 border-amber-200 hover:bg-amber-100 text-amber-800'],
+          ['presenza', '3. Ingresso', 'bg-emerald-50 border-emerald-200 hover:bg-emerald-100 text-emerald-800'],
+          ['pergamena', '4. Uscita', 'bg-violet-50 border-violet-200 hover:bg-violet-100 text-violet-800']
+        ];
+        return `<tr id="riga-${code}" class="border-b border-slate-100 hover:bg-slate-50 transition text-xs font-semibold text-slate-700">
+          <td class="p-4 align-top"><div class="font-mono font-bold text-indigo-600 text-sm">${code}</div><div class="text-[10px] text-slate-500 font-bold mt-1 bg-slate-200 inline-block px-2 py-0.5 rounded cella-stato">${escWaitlist(statusLabel)}</div></td>
+          <td class="p-4 align-top font-black text-slate-900">${escWaitlist(String(r.cognome || '').toUpperCase())}<br>${escWaitlist(String(r.nome || '').toUpperCase())}</td>
+          <td class="p-4 text-xs align-top"><div class="font-semibold text-slate-700">${escWaitlist(r.email)}</div><div class="text-[11px] text-slate-600 font-bold mt-1 whitespace-normal">Posti: ${seatsOf(r)} | Scuola: ${escWaitlist(r.provenienza)}</div></td>
+          <td class="p-4 text-xs align-top"><div class="font-bold text-slate-800 text-[10px] max-w-[175px] whitespace-normal">${escWaitlist(r.studyPath)}</div>${openDayLiceoPreferenceLabel(r) ? `<div class="text-[10px] text-emerald-700 font-black mt-1 whitespace-normal max-w-[180px]">${escWaitlist(openDayLiceoPreferenceLabel(r))}</div>` : ''}<div class="text-[11px] text-indigo-600 font-black mt-1">${escWaitlist(r.dateStr)}</div></td>
+          <td class="p-4 text-center align-top"><input type="checkbox" disabled ${r.inclusione ? 'checked' : ''} class="w-4 h-4 rounded text-violet-600 focus:ring-violet-500 bg-white border-slate-300"></td>
+          <td class="p-4 text-center align-top">${statusEditor}</td>
+          <td class="p-4 align-top"><div class="flex flex-col gap-2 min-w-[205px] mx-auto text-left">${communicationButtons.map(([type,label,style]) => `<button type="button" onclick="window.triggerEmailQueue('${code}','${type}')" class="border ${style} px-3 py-2 rounded-lg text-[10px] font-black flex justify-between gap-3 items-center transition cursor-pointer"><span class="shrink-0">${label}</span><span class="text-[10px] leading-snug text-right">${openDayEmailDisplay(r,type)}</span></button>`).join('')}</div><p class="text-[9px] text-slate-500 font-semibold mt-2 max-w-[210px] whitespace-normal">Orario di inoltro allo script, non conferma di lettura o consegna.</p></td>
+          <td class="p-4 text-right align-top"><div class="flex flex-col gap-2"><button onclick="window.openEditRegModal('${code}')" class="p-2.5 text-sky-600 bg-sky-50 hover:bg-sky-100 rounded-lg transition border border-transparent hover:border-sky-200 flex items-center justify-center cursor-pointer" title="Modifica"><i data-lucide="edit" class="w-4 h-4"></i></button><button onclick="window.triggerManualDelete('${code}')" class="p-2.5 text-rose-500 bg-rose-50 hover:bg-rose-100 rounded-lg transition border border-transparent hover:border-rose-200 flex items-center justify-center cursor-pointer" title="Elimina"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div></td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="8" class="p-8 text-center text-slate-500 font-bold">Nessuna iscrizione corrisponde ai filtri scelti.</td></tr>';
+      try { lucide.createIcons(); } catch(e) {}
     }
+
     window.renderRegistrations = renderRegistrations;
 
     async function updateDocField(code, field, value) {
@@ -3043,10 +3201,35 @@ Preferenza: ${openDayLiceoPreferenceLabel(regData)}` : regData.studyPath; docume
     window.triggerManualDelete = triggerManualDelete;
 
     function exportToExcel() {
-      let csv = "Codice;Cognome;Nome;Email;Turno;Indirizzo;Stato;Inclusione\n";
-      state.registrations.forEach(r => csv += `${r.code};${r.cognome};${r.nome};${r.email};${r.dateStr};${r.studyPath};${r.status};${r.inclusione?'Si':'No'}\n`);
-      const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' })); link.download = "iscritti_primolevi.csv"; link.click();
+      const rows = getOpenDayFilteredRegistrations();
+      if (!rows.length) return showToast('Nessuna iscrizione corrisponde ai filtri: non ci sono righe da esportare.', 'warning');
+      const headers = ['Codice', 'Cognome', 'Nome', 'E-mail genitore', 'Scuola provenienza', 'N. posti', 'Data e turno', 'Indirizzo', 'Percorso liceale', 'Stato', 'Inclusione', 'Pass - inoltro', 'Promemoria - inoltro', 'Ingresso - inoltro', 'Uscita - inoltro'];
+      function stampFor(reg, type) {
+        const fields = {pass:'passSentDate', promemoria:'promemoriaSentDate', presenza:'presenzaSentDate', pergamena:'pergamenaSentDate'};
+        const known = reg[`${type}SubmittedAt`] || (String(reg.lastEmailRequestId || '').startsWith(`${reg.code || reg.id}_${type}_`) ? reg.lastEmailSubmittedAt : null);
+        const status = String(reg[fields[type]] || '');
+        return openDayEmailTimestamp(known) || openDayEmailTimestamp(status) || (status.includes('IN_CODA') ? 'IN CODA' : status === 'VERIFICA_INVIO' ? 'Inoltrata (orario non registrato)' : '');
+      }
+      const data = [headers, ...rows.map(r => [String(r.code || r.id || ''), String(r.cognome || ''), String(r.nome || ''), String(r.email || ''), String(r.provenienza || ''), seatsOf(r), String(r.dateStr || ''), String(r.studyPath || ''), String(openDayLiceoPreferenceLabel(r) || ''), isWaitlistRegistration(r) ? 'In lista d’attesa' : String(r.status || 'Iscritto'), r.inclusione ? 'Sì' : 'No', stampFor(r, 'pass'), stampFor(r, 'promemoria'), stampFor(r, 'presenza'), stampFor(r, 'pergamena')])];
+      const day = openDayRomeParts().day;
+      if (window.XLSX?.utils?.aoa_to_sheet) {
+        const ws = XLSX.utils.aoa_to_sheet(data);
+        ws['!cols'] = [14,18,17,32,27,11,30,44,48,22,13,23,23,23,23].map(wch => ({ wch }));
+        ws['!autofilter'] = { ref: `A1:O${data.length}` };
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Registro filtrato');
+        XLSX.writeFile(wb, `OpenDay_PrimoLevi_Registro_Filtrato_${day}.xlsx`);
+        showToast(`Excel generato: ${rows.length} iscrizioni filtrate.`, 'success');
+      } else {
+        // Solo se CDN XLSX non disponibile: CSV UTF-8 comunque leggibile da Excel.
+        const cell = v => '"' + String(v ?? '').replace(/"/g,'""') + '"';
+        const csv = '\uFEFF' + data.map(row => row.map(cell).join(';')).join('\r\n');
+        const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+        const link = document.createElement('a'); link.href = url; link.download = `OpenDay_PrimoLevi_Registro_Filtrato_${day}.csv`; document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 10000);
+        showToast('Libreria Excel non caricata: esportato CSV compatibile con Excel. Controllare la connessione per ottenere .xlsx.', 'warning');
+      }
     }
+
     window.exportToExcel = exportToExcel;
 
     async function handleCreateTurno(e) {
