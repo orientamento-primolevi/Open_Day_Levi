@@ -569,6 +569,9 @@
                 <button onclick="window.savePromemoriaSettings()" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition">Salva Configurazione</button>
               </div>
               <span class="text-[10px] text-slate-400 font-bold block">Specifica quanti giorni prima del turno d'aula inviare la mail promemoria automatica.</span>
+              <label for="settingsPromemoriaScriptUrl" class="text-[10px] font-black text-slate-500 uppercase tracking-wider block pt-3">URL Apps Script dedicato ai soli promemoria</label>
+              <input id="settingsPromemoriaScriptUrl" type="url" autocomplete="off" spellcheck="false" placeholder="https://script.google.com/macros/s/NUOVO_DEPLOYMENT/exec" class="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-semibold outline-none break-all">
+              <p id="settingsPromemoriaScriptStatus" class="text-[10px] text-amber-700 font-bold leading-relaxed">Promemoria sospesi finché non viene configurato uno script distinto dalle conferme. Inserisci l'URL e premi Salva Configurazione.</p>
             </div>
 
             <!-- La procedura di spostamento del 14/11 è storica, non appare tra le operazioni quotidiane. -->
@@ -937,9 +940,20 @@
     }
 
     // ENDPOINT GOOGLE APPS SCRIPT - servizi separati
-    // 1) Email ordinarie/conferme/promemoria: limite applicativo di 1.500 invii al giorno.
+    // 1) Conferme e comunicazioni ordinarie: script storico, invariato.
     const MAIL_QUOTA_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzcsyU62idT5auPF5X7J6UH8VD01pH4XD3We1i_rEAquji-m4hj8-BXJBSIsZl0u6bW/exec";
     const CONFIRM_SCRIPT_URL = MAIL_QUOTA_SCRIPT_URL;
+    // 1b) Promemoria: script DIVERSO, configurabile dall'Area Docenti.
+    // Nessun fallback al servizio conferme: in assenza di URL restano in coda.
+    window.promemoriaScriptUrl = '';
+    function isValidOpenDayReminderScriptUrl(url) {
+      return /^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(String(url || '').trim()) &&
+        String(url).trim() !== MAIL_QUOTA_SCRIPT_URL;
+    }
+    function getOpenDayReminderScriptUrl() {
+      const url = String(window.promemoriaScriptUrl || '').trim();
+      return isValidOpenDayReminderScriptUrl(url) ? url : '';
+    }
     // 2) Pergamena/pass di iscrizione e attestato di ingresso.
     const REGISTRATION_PARCHMENT_URL = "https://script.google.com/macros/s/AKfycbwbupK4JchmR2f6JIdfJKU5chOedSmQGg8HiI9TqPoTtyeKs3YoknpbPAyo6NW4OXZb/exec";
     const CANCEL_SCRIPT_URL = "https://script.google.com/macros/s/AKfycby27Bw2o_0iLbISpOUdodrbdHGktAb17KGPpHjQgUjt9i1cgOxMvrXNSBKY1absG2Xi/exec";
@@ -1488,7 +1502,7 @@
           { type: 'pass', field: 'passSentDate', queuedAtField: 'passQueuedAt', url: REGISTRATION_PARCHMENT_URL, order: 0 },
           { type: 'presenza', field: 'presenzaSentDate', queuedAtField: 'presenzaQueuedAt', url: ATTESTATO_ENTRATA_URL, order: 1 },
           { type: 'pergamena', field: 'pergamenaSentDate', queuedAtField: 'pergamenaQueuedAt', url: ATTESTATO_USCITA_URL, order: 2 },
-          { type: 'promemoria', field: 'promemoriaSentDate', queuedAtField: 'promemoriaQueuedAt', url: MAIL_QUOTA_SCRIPT_URL, order: 3 },
+          { type: 'promemoria', field: 'promemoriaSentDate', queuedAtField: 'promemoriaQueuedAt', url: getOpenDayReminderScriptUrl(), order: 3 },
           { type: 'cancellazione', field: 'cancellationEmailStatus', queuedAtField: 'cancellationEmailQueuedAt', url: CANCEL_SCRIPT_URL, order: 4 }
         ];
         const items = [];
@@ -1612,7 +1626,10 @@
           // eseguire una seconda riconciliazione produceva lavoro duplicato.
           const queue = await this.preparePendingQueue();
           if (!queue.length) return true;
-          const readyQueue = openDayReminderWindowOpen() ? queue : queue.filter(item => item.type !== 'promemoria');
+          // Lo script dedicato deve essere configurato: niente fallback alle conferme.
+          const readyQueue = queue.filter(item => item.type !== 'promemoria' ||
+            (Boolean(item.url) && (openDayReminderWindowOpen() ||
+              Number(item.reg.manualEmailRequestAt || 0) >= Number(item.queuedAt || 0))));
           if (!readyQueue.length) return true;
           const nextBatch = readyQueue.slice(0, this.batchSize);
           anotherBatchNeeded = readyQueue.length > nextBatch.length;
@@ -1633,7 +1650,9 @@
             if (!String(currentReg[queuedItem.field] || '').includes('IN_CODA')) continue;
             // Nessun promemoria automatico al di fuori delle 09:00-16:00.
             // I messaggi ancora in coda restano disponibili nel database.
-            if (queuedItem.type === 'promemoria' && !openDayReminderWindowOpen()) continue;
+            if (queuedItem.type === 'promemoria' &&
+                (!queuedItem.url || (!openDayReminderWindowOpen() &&
+                Number(currentReg.manualEmailRequestAt || 0) < Number(queuedItem.queuedAt || 0)))) continue;
             await this.dispatchEmail({ ...queuedItem, reg: currentReg });
             attempted++;
             if (this.firestoreQuotaPaused) {
@@ -1755,6 +1774,11 @@
             if (isCancelled && originalItem.type !== 'cancellazione') continue;
             if (!isCancelled && originalItem.type === 'cancellazione') continue;
             if (!String(currentReg[originalItem.field] || '').includes('IN_CODA')) continue;
+            if (originalItem.type === 'promemoria' && !originalItem.url) {
+              report.failed.push({code, student: `${currentReg.cognome || ''} ${currentReg.nome || ''}`.trim(),
+                type: 'Promemoria', error: 'Configura l’URL del nuovo Apps Script nell’Area Docenti; richiesta conservata in coda.'});
+              continue;
+            }
             const item = { ...originalItem, reg: currentReg };
             const ok = await this.dispatchEmail(item);
             attemptedCount++;
@@ -1808,6 +1832,10 @@
         const queuedAtMap = { pass: 'passQueuedAt', promemoria: 'promemoriaQueuedAt', presenza: 'presenzaQueuedAt', pergamena: 'pergamenaQueuedAt', cancellazione: 'cancellationEmailQueuedAt' };
         const field = fieldMap[item.type];
         if (!field) return false;
+        if (item.type === 'promemoria' && (!item.url || item.url !== getOpenDayReminderScriptUrl())) {
+          this.log('Promemoria non inviato: URL dello script dedicato mancante o non valido. Coda conservata.', 'warning');
+          return false;
+        }
         const code = item.reg.code || item.reg.id;
         // Controllo finale sul database dopo aver acquisito il lease condiviso:
         // un invio completato dal worker server non deve essere ripetuto da un
@@ -2102,9 +2130,14 @@
       if (!normalizedPayload.data && normalizedPayload.dateStr) normalizedPayload.data = normalizedPayload.dateStr;
       if (!normalizedPayload.attivita && normalizedPayload.studyPath) normalizedPayload.attivita = `Open Day - ${normalizedPayload.studyPath}`;
       normalizedPayload.requestId = normalizedPayload.requestId || `openday_${normalizedPayload.code || 'evento'}_${normalizedPayload.type || 'mail'}_${Date.now()}`;
+      // Il tipo promemoria non può raggiungere lo script delle conferme.
+      if (normalizedPayload.type === 'promemoria' && (!getOpenDayReminderScriptUrl() || url !== getOpenDayReminderScriptUrl()))
+        throw new Error('URL promemoria non configurato: invio annullato senza contattare Google.');
+      if (url === getOpenDayReminderScriptUrl() && normalizedPayload.type !== 'promemoria')
+        throw new Error('Lo script promemoria accetta esclusivamente comunicazioni di tipo promemoria.');
 
       let quotaReservation = null;
-      if (url === MAIL_QUOTA_SCRIPT_URL) {
+      if (url === MAIL_QUOTA_SCRIPT_URL || (url && url === getOpenDayReminderScriptUrl())) {
         quotaReservation = await reserveOpenDayEmailQuotaSlot();
         if (!quotaReservation.reserved) {
           if (window.SmartEmailEngine) window.SmartEmailEngine.serverQuotaBlockedDate = quotaReservation.date;
@@ -2809,10 +2842,19 @@
       getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'promemoria'))
         .then(snapshot => {
           if (!snapshot.exists()) return;
-          const days = snapshot.data().days || 7;
+          const config = snapshot.data() || {};
+          const days = config.days || 7;
           const input = document.getElementById('settingsPromemoriaDays');
           if (input) input.value = days;
           window.promemoriaDays = days;
+          window.promemoriaScriptUrl = isValidOpenDayReminderScriptUrl(config.scriptUrl) ? String(config.scriptUrl).trim() : '';
+          const urlInput = document.getElementById('settingsPromemoriaScriptUrl');
+          if (urlInput) urlInput.value = window.promemoriaScriptUrl;
+          const status = document.getElementById('settingsPromemoriaScriptStatus');
+          if (status) {
+            status.textContent = window.promemoriaScriptUrl ? 'Script promemoria dedicato configurato. Gli invii sono separati dalle conferme.' : 'Script promemoria non configurato: richieste conservate in coda.';
+            status.className = window.promemoriaScriptUrl ? 'text-[10px] text-emerald-700 font-bold leading-relaxed' : 'text-[10px] text-amber-700 font-bold leading-relaxed';
+          }
         }).catch(error => console.warn('Configurazione promemoria Firestore', error));
     }
 
@@ -3903,12 +3945,30 @@ Preferenza: ${openDayLiceoPreferenceLabel(regData)}` : regData.studyPath; docume
     window.triggerDeleteTurno = triggerDeleteTurno;
 
     async function savePromemoriaSettings() {
-      const days = parseInt(document.getElementById('settingsPromemoriaDays').value || 7);
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'promemoria'), { days });
-      window.promemoriaDays = days;
-      await window.reconcileScheduledOpenDayEmails();
-      await window.SmartEmailEngine.flushNow();
-      showToast("Impostazioni salvate e coda promemoria verificata!", "success");
+      if (!state.isAdminAuthed) return showToast('Accedi all’Area Docenti per modificare le impostazioni.', 'error');
+      const days = Number(document.getElementById('settingsPromemoriaDays')?.value || 7);
+      const url = String(document.getElementById('settingsPromemoriaScriptUrl')?.value || '').trim();
+      if (!Number.isInteger(days) || days < 1 || days > 15)
+        return showToast('Inserisci un numero di giorni tra 1 e 15.', 'error');
+      if (url && !isValidOpenDayReminderScriptUrl(url))
+        return showToast('URL non valido o uguale allo script delle conferme. Serve il nuovo URL /exec.', 'error');
+      try {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'promemoria'),
+          { days, scriptUrl: url }, { merge: true });
+        window.promemoriaDays = days;
+        window.promemoriaScriptUrl = url;
+        const status = document.getElementById('settingsPromemoriaScriptStatus');
+        if (status) {
+          status.textContent = url ? 'Script promemoria dedicato configurato. Le richieste in coda verranno elaborate.' : 'Script promemoria non configurato: richieste conservate in coda.';
+          status.className = url ? 'text-[10px] text-emerald-700 font-bold leading-relaxed' : 'text-[10px] text-amber-700 font-bold leading-relaxed';
+        }
+        await window.reconcileScheduledOpenDayEmails();
+        await window.SmartEmailEngine.flushNow();
+        showToast(url ? 'Script promemoria separato salvato. Coda verificata.' : 'Giorni salvati: promemoria in coda fino alla configurazione dello script.', 'success');
+      } catch (error) {
+        console.error('Salvataggio configurazione promemoria', error);
+        showToast('Impossibile salvare la configurazione: ' + String(error.message || error), 'error');
+      }
     }
     window.savePromemoriaSettings = savePromemoriaSettings;
 
