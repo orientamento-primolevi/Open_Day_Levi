@@ -385,6 +385,29 @@
           <div class="flex items-center gap-2"><i data-lucide="clock-4" class="w-4 h-4"></i> <span id="openDayBackgroundWorkerStatus">Automazione a browser chiuso: verifica configurazione Google Apps Script.</span></div>
           <p class="mt-1 text-indigo-700 text-[11px]">Gli invii generati da un genitore vengono tentati subito. Per i promemoria e le uscite programmati quando nessun browser è aperto serve un servizio server pianificato: nessun HTML statico può sostituirlo.</p>
         </div>
+        <!-- MOTORE PROMEMORIA AUTONOMO: non consuma il contatore applicativo da 1500 -->
+        <div id="reminderEnginePanel" class="bg-white rounded-3xl border border-amber-200 shadow-sm p-5 md:p-6 space-y-4">
+          <div class="flex flex-wrap justify-between gap-3 items-start">
+            <div>
+              <h4 class="font-outfit font-black text-indigo-950 text-lg flex items-center gap-2"><i data-lucide="clock-3" class="text-amber-600 w-5 h-5"></i> Motore Promemoria Autonomo · 100 / 24h</h4>
+              <p class="text-xs text-slate-600 font-semibold mt-1">Script indipendente, anticopia, coda persistente su Firestore. Elabora fino a 5 promemoria per lotto e riprende quando Google ripristina la quota.</p>
+            </div>
+            <span id="reminderEngineStatus" class="text-xs font-black text-indigo-800 bg-indigo-50 border border-indigo-200 px-3 py-2 rounded-lg" role="status">Non avviato</span>
+          </div>
+          <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div class="bg-amber-50 rounded-xl border border-amber-100 p-3"><span class="block text-[10px] font-black uppercase text-amber-800">Ancora in coda</span><b id="reminderPending" class="text-2xl text-amber-700">0</b></div>
+            <div class="bg-emerald-50 rounded-xl border border-emerald-100 p-3"><span class="block text-[10px] font-black uppercase text-emerald-800">Confermati script</span><b id="reminderSent" class="text-2xl text-emerald-700">0</b></div>
+            <div class="bg-indigo-50 rounded-xl border border-indigo-100 p-3"><span class="block text-[10px] font-black uppercase text-indigo-800">Da verificare</span><b id="reminderVerify" class="text-2xl text-indigo-700">0</b></div>
+            <div class="bg-rose-50 rounded-xl border border-rose-100 p-3"><span class="block text-[10px] font-black uppercase text-rose-800">Dati da correggere</span><b id="reminderRejected" class="text-2xl text-rose-700">0</b></div>
+            <div class="bg-sky-50 rounded-xl border border-sky-100 p-3"><span class="block text-[10px] font-black uppercase text-sky-800">Google disponibili</span><b id="reminderGoogleQuota" class="text-2xl text-sky-700">—</b></div>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+            <div class="space-y-2"><div class="flex justify-between text-xs font-black text-slate-600"><span>Promemoria utilizzati in 24h</span><span id="reminderQuota">— / 100</span></div><div class="h-2.5 bg-slate-100 rounded-full overflow-hidden"><div id="reminderQuotaBar" class="bg-amber-500 h-full transition-all" style="width:0%"></div></div><p class="text-[11px] text-slate-600">Disponibili ora nel motore: <b id="reminderAvailable">—</b>. Prossimo slot: <span id="reminderQuotaNext">non verificato</span>.</p></div>
+            <div class="flex flex-wrap gap-2 md:justify-end"><button type="button" onclick="window.ReminderEngine.flushNow()" class="bg-amber-500 hover:bg-amber-600 text-white font-black rounded-xl text-xs px-4 py-3">INVIA / RIPRENDI PROMEMORIA</button><button type="button" onclick="window.ReminderEngine.refreshQuota(true).catch(e=>window.ReminderEngine.log(e.message,'error'))" class="bg-indigo-100 hover:bg-indigo-200 text-indigo-900 font-black rounded-xl text-xs px-4 py-3">CONTROLLA QUOTA</button></div>
+          </div>
+          <p class="text-[11px] font-semibold text-slate-500">I contatori confermati si riferiscono alle prenotazioni presenti nel registro. «Inviato» significa che MailApp ha accettato la spedizione, non che il destinatario abbia letto il messaggio. Lascia aperta e autenticata l’Area Docenti per mantenere il motore attivo.</p>
+          <div id="reminderEngineLog" class="system-log h-28 overflow-auto rounded-xl bg-slate-950 text-emerald-300 text-[10px] font-mono p-3 space-y-1" aria-live="polite"><div>Motore promemoria pronto.</div></div>
+        </div>
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
           <!-- Stato Sistema -->
@@ -551,7 +574,7 @@
               <button id="btnSendPendingEmails" onclick="window.sendPendingEmails()" class="px-4 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-black uppercase transition shadow-md flex justify-center items-center gap-2 w-full">
                 <i data-lucide="send" class="w-4 h-4"></i> INVIA E-MAIL IN CODA (SOSPESE)
               </button>
-              <p class="text-[10px] text-slate-500 font-bold mt-2 leading-relaxed">Invia le richieste in coda nell'ordine temporale: pass, ingresso, uscita, promemoria, cancellazione. La trasmissione a Google non equivale alla consegna: le richieste senza ricevuta verificabile sono indicate come «DA VERIFICARE» e non vengono reinviate automaticamente.</p>
+              <p class="text-[10px] text-slate-500 font-bold mt-2 leading-relaxed">Invia le richieste ordinarie in coda nell'ordine temporale: pass, ingresso, uscita, cancellazione. I promemoria usano il motore autonomo nella scheda Motore E-mail. La trasmissione a Google non equivale alla consegna: le richieste senza ricevuta verificabile sono indicate come «DA VERIFICARE» e non vengono reinviate automaticamente.</p>
               <div id="emailSendSummary" class="hidden mt-4 p-4 rounded-xl border border-slate-200 bg-slate-50" aria-live="polite">
                 <h5 class="text-xs font-black uppercase text-indigo-900 mb-2">Riepilogo elaborazione email</h5>
                 <pre id="emailSendSummaryText" class="whitespace-pre-wrap break-words text-[11px] leading-relaxed font-semibold text-slate-700"></pre>
@@ -945,7 +968,8 @@
     const CONFIRM_SCRIPT_URL = MAIL_QUOTA_SCRIPT_URL;
     // 1b) Promemoria: script DIVERSO, configurabile dall'Area Docenti.
     // Nessun fallback al servizio conferme: in assenza di URL restano in coda.
-    window.promemoriaScriptUrl = 'https://script.google.com/macros/s/AKfycbyLxOLg4MxafrcPRgGPs2KJu88WDGCmVgrB3JKspWT0_t2lP5rDKjJIBeRH7s0H7iCkLg/exec';
+    const OPEN_DAY_REMINDER_DEFAULT_URL = 'https://script.google.com/macros/s/AKfycbywMli-wwP2MuMyDO7gE4skNRU8s0paUzkV-MUA_HbqIfnvKNLKTJ-QT_Py_bjnmGR_wQ/exec';
+    window.promemoriaScriptUrl = OPEN_DAY_REMINDER_DEFAULT_URL;
     function isValidOpenDayReminderScriptUrl(url) {
       return /^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(String(url || '').trim()) &&
         String(url).trim() !== MAIL_QUOTA_SCRIPT_URL;
@@ -1412,6 +1436,343 @@
     // Firestore in risposta a snapshot o email, perché causavano cicli di scritture.
     async function closeOpenDayIfAdmissionEmailsSent() { return false; }
 
+    // ================================================================
+    // OPEN DAY LEVI - MOTORE AUTONOMO PROMEMORIA 100 / 24H (V2)
+    // Separato da pass, conferme, attestati e quota ordinaria.
+    // Lo stato di ogni richiesta resta nel documento di prenotazione Firestore.
+    // Lo script Apps Script V2 conserva l'ID anti-duplicato e conferma gli invii.
+    // ================================================================
+    const ReminderEngine = {
+      timerId: null,
+      processing: false,
+      batchSize: 5,
+      intervalMs: 60000,
+      lastQuotaCheckAt: 0,
+      lastVerificationAt: 0,
+      verificationCursor: 0,
+      lastWindowNoticeAt: 0,
+      quota: null,
+      nextRunTimer: null,
+      consecutiveErrors: 0,
+      log(text, kind = 'info') {
+        const el = document.getElementById('reminderEngineLog');
+        if (!el) return;
+        const row = document.createElement('div');
+        row.className = kind === 'error' ? 'text-rose-400' : kind === 'warning' ? 'text-amber-300' : 'text-emerald-300';
+        const dt = new Date().toLocaleTimeString('it-IT');
+        row.textContent = `[${dt}] ${text}`;
+        el.appendChild(row);
+        while (el.children.length > 180) el.removeChild(el.firstChild);
+        el.scrollTop = el.scrollHeight;
+      },
+      start() {
+        if (this.timerId) return;
+        this.timerId = setInterval(() => this.cycle().catch(e => this.log(String(e), 'error')), this.intervalMs);
+        this.log('Motore promemoria autonomo avviato. In coda fino a 100 invii in una finestra mobile di 24 ore.');
+        this.render();
+        this.cycle().catch(e => this.log(String(e), 'error'));
+      },
+      stop() {
+        if (this.timerId) clearInterval(this.timerId);
+        if (this.nextRunTimer) clearTimeout(this.nextRunTimer);
+        this.timerId = null;
+        this.nextRunTimer = null;
+        this.render();
+      },
+      scheduleNext(ms = 5000) {
+        if (!this.timerId || this.nextRunTimer) return;
+        this.nextRunTimer = setTimeout(() => {
+          this.nextRunTimer = null;
+          this.cycle().catch(e => this.log(String(e), 'error'));
+        }, ms);
+      },
+      async jsonp(azione, requestId = '') {
+        const url = getOpenDayReminderScriptUrl();
+        if (!url) throw new Error('Script promemoria non configurato.');
+        return new Promise((resolve, reject) => {
+          const callbackName = 'LeviRemCb_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9);
+          const script = document.createElement('script');
+          let done = false;
+          const cleanup = () => {clearTimeout(timeout);delete window[callbackName];script.remove();};
+          const timeout = setTimeout(() => {if (!done) {done = true;cleanup();reject(new Error('Controllo Apps Script non disponibile (timeout).'));}}, 16000);
+          window[callbackName] = data => {if (!done) {done = true;cleanup();resolve(data);}};
+          script.onerror = () => {if (!done) {done = true;cleanup();reject(new Error('Impossibile leggere lo stato Apps Script.'));}};
+          const q = new URLSearchParams({azione,callback:callbackName,ts:String(Date.now())});
+          if (requestId) q.set('requestId',requestId);
+          script.src = url + '?' + q.toString();
+          document.head.appendChild(script);
+        });
+      },
+      async refreshQuota(force = false) {
+        if (!force && this.quota && Date.now() - this.lastQuotaCheckAt < 180000) return this.quota;
+        const result = await this.jsonp('quota');
+        if (!result || result.ok !== true || String(result.version || '').split('.')[0] !== '2' || !Number.isFinite(Number(result.disponibili)))
+          throw new Error('Apps Script promemoria V2 non installato o non raggiungibile. Nessuna email inviata.');
+        this.quota = result;
+        this.lastQuotaCheckAt = Date.now();
+        this.render();
+        return result;
+      },
+      requestId(reg) {
+        const code = String(reg.code || reg.id || '');
+        const at = Number(reg.promemoriaQueuedAt || reg.manualEmailRequestAt || reg.timestamp || 0);
+        return `${code}_promemoria_${at}`;
+      },
+      isActive(reg) {
+        const status = normalizeWaitlistText(reg?.status);
+        return Boolean(reg && !isWaitlistRegistration(reg) && status !== 'annullato' && status !== 'assente' && status !== 'concluso' && String(reg.type || '').toLowerCase() !== 'cancellazione');
+      },
+      pending() {
+        return (state.registrations || []).filter(r => this.isActive(r) && String(r.promemoriaSentDate || '').includes('IN_CODA'))
+          .sort((a,b) => Number(a.promemoriaQueuedAt || a.timestamp || 0) - Number(b.promemoriaQueuedAt || b.timestamp || 0));
+      },
+      render() {
+        const all = state.registrations || [];
+        const pending = this.pending().length;
+        const confirmed = all.filter(r => String(r.promemoriaLastResult || '') === 'SENT' ||
+          (/^\d{4}-\d{2}-\d{2}T/.test(String(r.promemoriaSentDate || '')))).length;
+        const uncertain = all.filter(r => ['VERIFICA_INVIO','ELABORAZIONE'].includes(String(r.promemoriaSentDate || ''))).length;
+        const rejected = all.filter(r => String(r.promemoriaSentDate || '') === 'BLOCCATO_VALIDAZIONE').length;
+        const set = (id, text) => {const el=document.getElementById(id);if(el)el.textContent=String(text);};
+        set('reminderPending',pending);
+        set('reminderSent',confirmed);
+        set('reminderVerify',uncertain);
+        set('reminderRejected',rejected);
+        set('reminderQuota',this.quota ? `${this.quota.usateFinestraMobile24h} / 100` : '— / 100');
+        set('reminderGoogleQuota',this.quota ? this.quota.quotaGoogleResidua : 'non verificata');
+        set('reminderAvailable',this.quota ? this.quota.disponibili : '—');
+        let status = !this.timerId ? 'Non avviato' : this.processing ? 'Elaborazione in corso' : 'Attivo, in attesa';
+        if (this.timerId && this.quota && this.quota.disponibili === 0) status = 'Quota esaurita: attesa ripristino';
+        set('reminderEngineStatus',status);
+        const last = this.quota?.prossimoSlotApplicativo;
+        set('reminderQuotaNext',last ? new Date(last).toLocaleString('it-IT') + ' (prima disponibilità applicativa stimata)' : 'Non determinabile; controlla la quota Google');
+        const bar = document.getElementById('reminderQuotaBar');
+        if (bar) bar.style.width = `${Math.min(100,100*Number(this.quota?.usateFinestraMobile24h || 0)/100)}%`;
+      },
+      async updateStatus(reg, updates) {
+        const ref = doc(db,'artifacts',appId,'public','data','registrations',String(reg.code || reg.id));
+        await updateDoc(ref, updates);
+        Object.assign(reg, updates);
+        const local = (state.registrations || []).find(r => String(r.code || r.id) === String(reg.code || reg.id));
+        if (local) Object.assign(local,updates);
+        this.render();
+        if (state.currentView === 'admin' && !document.getElementById('tabRegistrations')?.classList.contains('hidden')) window.renderRegistrations();
+      },
+      async applyRemoteStatus(reg, requestId, result) {
+        const s = String(result?.status || 'NOT_FOUND');
+        if (s === 'SENT') {
+          const when = result.sentAt || new Date().toISOString();
+          await this.updateStatus(reg,{promemoriaSentDate:when,promemoriaLastResult:'SENT',
+            promemoriaSubmittedAt:Date.parse(when) || Date.now(),promemoriaRequestId:requestId,
+            promemoriaProcessingAt:null,promemoriaError:null});
+          this.log(`Promemoria ${reg.code || reg.id}: INVIO CONFERMATO da Apps Script il ${new Date(when).toLocaleString('it-IT')}.`);
+          return 'SENT';
+        }
+        if (s === 'WAIT_QUOTA') {
+          await this.updateStatus(reg,{promemoriaSentDate:'IN_CODA_Q2',promemoriaLastResult:'WAIT_QUOTA',
+            promemoriaRequestId:requestId,promemoriaProcessingAt:null,promemoriaError:'Quota giornaliera insufficiente. Riprova dopo il ripristino.'});
+          this.log(`Promemoria ${reg.code || reg.id}: quota esaurita, conservato in coda.`, 'warning');
+          this.lastQuotaCheckAt = 0;
+          return 'WAIT_QUOTA';
+        }
+        if (s === 'UNKNOWN' || s === 'ATTEMPTING') {
+          await this.updateStatus(reg,{promemoriaSentDate:'VERIFICA_INVIO',promemoriaLastResult:'UNKNOWN',
+            promemoriaRequestId:requestId,promemoriaProcessingAt:null,
+            promemoriaError:'Esito non certo su Apps Script: verificare prima di un eventuale reinvio.'});
+          this.log(`Promemoria ${reg.code || reg.id}: esito incerto, bloccato per evitare duplicati.`, 'warning');
+          return 'UNKNOWN';
+        }
+        return s;
+      },
+      async verifyUncertain(limit = 6) {
+        const candidates = (state.registrations || []).filter(r =>
+          ['VERIFICA_INVIO','ELABORAZIONE'].includes(String(r.promemoriaSentDate || '')) &&
+          (r.promemoriaRequestId || r.promemoriaQueuedAt));
+        if (!candidates.length) return;
+        const start = this.verificationCursor % candidates.length;
+        const entries = Array.from({length:Math.min(limit,candidates.length)},(_,i) => candidates[(start+i)%candidates.length]);
+        this.verificationCursor = (start+entries.length)%candidates.length;
+        for (const reg of entries) {
+          const id = String(reg.promemoriaRequestId || this.requestId(reg));
+          try {
+            const res = await this.jsonp('stato',id);
+            if (res?.ok && res.status === 'SENT') await this.applyRemoteStatus(reg,id,res);
+            else if (res?.ok && res.status === 'WAIT_QUOTA') await this.applyRemoteStatus(reg,id,res);
+            else if (res?.ok && res.status === 'UNKNOWN' && String(reg.promemoriaSentDate) !== 'VERIFICA_INVIO')
+              await this.applyRemoteStatus(reg,id,res);
+            else if (String(reg.promemoriaSentDate) === 'ELABORAZIONE' &&
+              Date.now()-Number(reg.promemoriaProcessingAt || 0) > 60000) {
+              await this.updateStatus(reg,{promemoriaSentDate:'VERIFICA_INVIO',promemoriaProcessingAt:null,
+                promemoriaRequestId:id,promemoriaError:'Nessun esito verificabile sul servizio: controllare Apps Script.'});
+            }
+          } catch (e) {this.log(`Verifica ${reg.code || reg.id}: ${e.message || e}`, 'warning');break;}
+        }
+      },
+      async sendOne(item) {
+        const code = String(item.code || item.id || '');
+        const ref = doc(db,'artifacts',appId,'public','data','registrations',code);
+        const snap = await getDoc(ref);
+        if (!snap.exists()) return;
+        const reg = {id:snap.id,...snap.data()};
+        if (!this.isActive(reg) || !String(reg.promemoriaSentDate || '').includes('IN_CODA')) return;
+        const slot = (state.dates || []).find(d => d.id === reg.dateId);
+        const slotStart = slot?.date ? parseOpenDayLocalDate(
+          slot.date, (String(slot.timeSlot || '').match(/\d{1,2}:\d{2}/) || ['00:00'])[0]) : null;
+        if ((slotStart && slotStart.getTime() <= Date.now()) || (slot && openDaySlotFinished(slot))) {
+          await this.updateStatus(reg,{promemoriaSentDate:'SCADUTO',promemoriaLastResult:'EXPIRED',promemoriaError:'Turno già terminato.'});
+          this.log(`Promemoria ${code}: evento già terminato; non viene inviato.`, 'warning');
+          return;
+        }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(reg.email || '')) ||
+            !String(reg.nome || '').trim() || !String(reg.cognome || '').trim() ||
+            !String(reg.dateStr || '').match(/\b\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{4}\b/) ||
+            !String(reg.studyPath || '').trim()) {
+          await this.updateStatus(reg,{promemoriaSentDate:'BLOCCATO_VALIDAZIONE',promemoriaLastResult:'REJECTED',
+            promemoriaError:'Dati mancanti o non validi; correggere la prenotazione e riaccodare manualmente.'});
+          this.log(`Promemoria ${code}: dati da correggere, invio bloccato.`, 'warning');
+          return;
+        }
+        const requestId = this.requestId(reg);
+        const prior = await this.jsonp('stato',requestId);
+        if (!prior || !prior.ok) throw new Error(`Stato remoto non disponibile per ${code}`);
+        if (prior.status === 'SENT' || prior.status === 'UNKNOWN' || prior.status === 'ATTEMPTING') {
+          await this.applyRemoteStatus(reg,requestId,prior);return;
+        }
+        // Il valore registrato sul server, non una risposta POST opaca,
+        // impedisce doppioni quando il browser è riavviato o cambia dispositivo.
+        await this.updateStatus(reg,{promemoriaSentDate:'ELABORAZIONE',
+          promemoriaProcessingAt:Date.now(),promemoriaRequestId:requestId,promemoriaError:null});
+        let attemptedPost = false;
+        try {
+          const payload = {...reg,type:'promemoria',requestId};
+          // Conserva l'attuale PDF pass, senza modificarne il generatore.
+          payload.pdfBase64 = await window.generateReceiptPDF(reg,code);
+          // Ultimo controllo immediatamente prima della trasmissione,
+          // anche quando la generazione PDF attraversa le ore 16:00.
+          if (!openDayReminderWindowOpen()) {
+            await this.updateStatus(reg,{promemoriaSentDate:'IN_CODA_Q2',
+              promemoriaProcessingAt:null,promemoriaError:'Fuori fascia 09:00-16:00: ripresa nella prossima finestra.'});
+            this.log(`Promemoria ${code}: chiusura fascia, invio rinviato.`, 'warning');
+            return;
+          }
+          // A differenza della quota ordinaria, NESSUNA prenotazione di slot 1500.
+          attemptedPost = true;
+          await fetch(getOpenDayReminderScriptUrl(),{
+            method:'POST',mode:'no-cors',cache:'no-store',redirect:'follow',
+            headers:{'Content-Type':'text/plain;charset=UTF-8'},body:JSON.stringify(payload)
+          });
+          let result = null;
+          for (const delay of [1200,2300,3800]) {
+            await new Promise(resolve => setTimeout(resolve,delay));
+            try {result = await this.jsonp('stato',requestId);} catch (e) {this.log(`Conferma ${code} temporaneamente indisponibile: ${e.message || e}`, 'warning');continue;}
+            if (result?.ok && ['SENT','WAIT_QUOTA','UNKNOWN'].includes(result.status)) break;
+          }
+          const remote = await this.applyRemoteStatus(reg,requestId,result);
+          if (remote === 'SENT') {
+            if (this.quota) {
+              this.quota.usateFinestraMobile24h++;
+              this.quota.disponibili=Math.max(0,this.quota.disponibili-1);
+              this.quota.quotaGoogleResidua=Math.max(0,this.quota.quotaGoogleResidua-1);
+              this.render();
+            }
+            return;
+          }
+          if (remote === 'WAIT_QUOTA') return;
+          if (remote !== 'UNKNOWN') {
+            await this.updateStatus(reg,{promemoriaSentDate:'VERIFICA_INVIO',promemoriaLastResult:'UNCONFIRMED',
+              promemoriaProcessingAt:null,promemoriaRequestId:requestId,
+              promemoriaError:'Richiesta POST effettuata ma risposta Apps Script non verificabile. Non reinviare automaticamente.'});
+            this.log(`Promemoria ${code}: in attesa di verifica. Nessun reinvio automatico.`, 'warning');
+          }
+        } catch (error) {
+          await this.updateStatus(reg,attemptedPost ? {
+            promemoriaSentDate:'VERIFICA_INVIO',promemoriaLastResult:'UNCONFIRMED',
+            promemoriaProcessingAt:null,promemoriaRequestId:requestId,promemoriaError:String(error?.message || error).slice(0,300)
+          } : {
+            promemoriaSentDate:'IN_CODA_Q2',promemoriaProcessingAt:null,
+            promemoriaError:'Preparazione PDF non riuscita: '+String(error?.message || error).slice(0,230)
+          });
+          this.log(`Promemoria ${code}: ${String(error?.message || error)}`, 'warning');
+        }
+      },
+      async cycle(force = false) {
+        if (this.processing || window.SmartEmailEngine?.isProcessing || openDayImmediateActive ||
+            !state.isAdminAuthed || !this.timerId) return;
+        if (!state.user || !openDayRegistrationsRealtimeReady || !openDayDatesRealtimeReady) return;
+        this.processing = true;
+        let locked = false;
+        let more = false;
+        try {
+          await reconcileScheduledOpenDayEmails();
+          if (Date.now()-this.lastVerificationAt > 300000 || force) {
+            this.lastVerificationAt=Date.now();
+            await this.verifyUncertain();
+          }
+          const q = this.pending();
+          if (!q.length) {
+            if (force || Date.now()-this.lastQuotaCheckAt>600000) await this.refreshQuota(true);
+            if (force) await this.verifyUncertain();
+            this.render();return;
+          }
+          // Vincolo rigoroso: gli invii automatici dei promemoria possono partire
+          // soltanto tra le 09:00 e le 16:00 (Europe/Rome), anche nei giorni
+          // successivi quando la quota Google torna disponibile.
+          // Fuori fascia la coda resta in Firestore, senza modifiche.
+          if (!openDayReminderWindowOpen()) {
+            if (force || Date.now() - this.lastWindowNoticeAt > 1800000) {
+              this.lastWindowNoticeAt = Date.now();
+              this.log(`Fuori fascia 09:00-16:00: ${q.length} promemoria conservati in coda fino alla prossima apertura.`, 'warning');
+            }
+            this.render(); return;
+          }
+          // La quota va letta PRIMA di iniziare invii e mai indovinata.
+          const quota = await this.refreshQuota(force || Date.now()-this.lastQuotaCheckAt>180000);
+          if (quota.disponibili < 1) {
+            if (force || this.consecutiveErrors===0)
+              this.log(`Quota sospesa: ${quota.usateFinestraMobile24h}/100 nel registro mobile; Google residua ${quota.quotaGoogleResidua}. Restano ${q.length} promemoria.`, 'warning');
+            this.consecutiveErrors = 1;
+            this.render();return;
+          }
+          this.consecutiveErrors=0;
+          // Lo stesso lease delle comunicazioni ordinarie evita gare
+          // tra differenti browser. I loro contatori rimangono separati.
+          locked = await acquireOpenDayEmailQueueLease(false);
+          if (!locked) {this.log('Coda condivisa occupata; riproverò senza perdere prenotazioni.', 'warning');return;}
+          const selected = q.slice(0,Math.min(this.batchSize,quota.disponibili));
+          more = q.length > selected.length;
+          for (const reg of selected) {
+            // Ricontrolla la fascia tra una e-mail e la successiva;
+            // un lotto iniziato alle 15:59 non deve inviare oltre le 16:00.
+            if (!openDayReminderWindowOpen()) {
+              this.log('Ore 16:00: invii promemoria sospesi, richieste restanti conservate.', 'warning');
+              break;
+            }
+            if (Number(this.quota?.disponibili || 0) < 1) break;
+            await this.sendOne(reg);
+            await new Promise(r => setTimeout(r,850));
+          }
+          this.render();
+          if (force) await this.verifyUncertain();
+        } catch (e) {
+          this.log(`Ciclo promemoria sospeso: ${String(e?.message || e)}. La coda rimane conservata.`, 'error');
+        } finally {
+          if (locked) await releaseOpenDayEmailQueueLease().catch(e => this.log(String(e),'warning'));
+          this.processing = false;
+          this.render();
+          if (more && Number(this.quota?.disponibili || 0) > 0) this.scheduleNext(6000);
+        }
+      },
+      async flushNow() {
+        if (!this.timerId) this.start();
+        if (this.processing) {this.log('Elaborazione già in corso; riprenderà automaticamente.');return;}
+        await this.cycle(true);
+      }
+    };
+    window.ReminderEngine = ReminderEngine;
+
+    // Mantieni i contatori visibili aggiornati con il listener Firestore;
+    // nessun promemoria viene inviato prima dell'accesso Docenti.
+
     const SmartEmailEngine = {
       maxDaily: 1500,
       batchSize: 10,
@@ -1502,7 +1863,6 @@
           { type: 'pass', field: 'passSentDate', queuedAtField: 'passQueuedAt', url: REGISTRATION_PARCHMENT_URL, order: 0 },
           { type: 'presenza', field: 'presenzaSentDate', queuedAtField: 'presenzaQueuedAt', url: ATTESTATO_ENTRATA_URL, order: 1 },
           { type: 'pergamena', field: 'pergamenaSentDate', queuedAtField: 'pergamenaQueuedAt', url: ATTESTATO_USCITA_URL, order: 2 },
-          { type: 'promemoria', field: 'promemoriaSentDate', queuedAtField: 'promemoriaQueuedAt', url: getOpenDayReminderScriptUrl(), order: 3 },
           { type: 'cancellazione', field: 'cancellationEmailStatus', queuedAtField: 'cancellationEmailQueuedAt', url: CANCEL_SCRIPT_URL, order: 4 }
         ];
         const items = [];
@@ -1545,7 +1905,6 @@
         const staleWrites = [];
         const queueFields = [
           ['passSentDate', 'passQueuedAt'],
-          ['promemoriaSentDate', 'promemoriaQueuedAt'],
           ['presenzaSentDate', 'presenzaQueuedAt'],
           ['pergamenaSentDate', 'pergamenaQueuedAt'],
           ['cancellationEmailStatus', 'cancellationEmailQueuedAt']
@@ -1589,14 +1948,14 @@
 
         const items = this.collectQueueItems();
         const q1 = items.filter(x => x.type === 'pass').length;
-        const q2 = items.filter(x => x.type === 'promemoria').length;
+        const q2 = q2Count(); // indicatore coda autonoma: non elaborata dal motore ordinario
         const q3 = items.filter(x => x.type === 'presenza' || x.type === 'pergamena' || x.type === 'cancellazione').length;
         this.updateDashboard(q1, q2, q3);
         return items;
       },
 
       async processQueues() {
-        if (this.isProcessing) return false;
+        if (this.isProcessing || window.ReminderEngine?.processing || openDayImmediateActive) return false;
         // Nessuna transazione di lock ogni minuto quando non ci sono invii, scadenze
         // o elaborazioni interrotte da verificare. Il listener realtime risveglia
         // naturalmente il controllo quando arriva una nuova prenotazione.
@@ -1687,7 +2046,8 @@
       },
 
       async drainPending() {
-        while (this.isProcessing) await new Promise(resolve => setTimeout(resolve, 150));
+        while (this.isProcessing || window.ReminderEngine?.processing || openDayImmediateActive)
+          await new Promise(resolve => setTimeout(resolve, 150));
         this.firestoreQuotaPaused = false;
         this.isProcessing = true;
         let leaseAcquired = false;
@@ -1713,8 +2073,8 @@
           // Le vecchie voci ELABORAZIONE senza timestamp non sono verificabili automaticamente.
           const legacyStuck = (state.registrations || []).filter(r => {
             const isCancelled = normalizeWaitlistText(r.status) === 'annullato' || String(r.type || '').toLowerCase() === 'cancellazione';
-            const fields = [r.passSentDate, r.promemoriaSentDate, r.presenzaSentDate, r.pergamenaSentDate, r.cancellationEmailStatus];
-            return fields.some((v, i) => String(v || '').includes('ELABORAZIONE') && (!isCancelled || i === 4)) && !Number(r.emailProcessingAt || 0);
+            const fields = [r.passSentDate, r.presenzaSentDate, r.pergamenaSentDate, r.cancellationEmailStatus];
+            return fields.some((v, i) => String(v || '').includes('ELABORAZIONE') && (!isCancelled || i === 3)) && !Number(r.emailProcessingAt || 0);
           });
           if (legacyStuck.length) {
             const ok = confirm(
@@ -1727,7 +2087,6 @@
                 const queuedAt = Date.now();
                 const updates = { emailProcessingAt: null };
                 if (String(reg.passSentDate || '').includes('ELABORAZIONE')) Object.assign(updates, { passSentDate: 'IN_CODA_RETRY', passQueuedAt: queuedAt });
-                if (String(reg.promemoriaSentDate || '').includes('ELABORAZIONE')) Object.assign(updates, { promemoriaSentDate: 'IN_CODA_RETRY', promemoriaQueuedAt: queuedAt });
                 if (String(reg.presenzaSentDate || '').includes('ELABORAZIONE')) Object.assign(updates, { presenzaSentDate: 'IN_CODA_RETRY', presenzaQueuedAt: queuedAt });
                 if (String(reg.pergamenaSentDate || '').includes('ELABORAZIONE')) Object.assign(updates, { pergamenaSentDate: 'IN_CODA_RETRY', pergamenaQueuedAt: queuedAt });
                 if (String(reg.cancellationEmailStatus || '').includes('ELABORAZIONE')) Object.assign(updates, { cancellationEmailStatus: 'IN_CODA_RETRY', cancellationEmailQueuedAt: queuedAt });
@@ -1743,7 +2102,6 @@
               for (const reg of legacyStuck) {
                 const fields = [
                   ['passSentDate', 'Pass ammissione'],
-                  ['promemoriaSentDate', 'Promemoria'],
                   ['presenzaSentDate', 'Conferma ingresso'],
                   ['pergamenaSentDate', 'Conferma uscita'],
                   ['cancellationEmailStatus', 'Conferma annullamento']
@@ -1806,7 +2164,6 @@
               ['passSentDate', 'Pass ammissione'],
               ['presenzaSentDate', 'Conferma ingresso'],
               ['pergamenaSentDate', 'Conferma uscita'],
-              ['promemoriaSentDate', 'Promemoria'],
               ['cancellationEmailStatus', 'Conferma annullamento']
             ];
             return definitions.filter(([field]) => String(reg[field] || '') === 'VERIFICA_INVIO').map(([field, label]) => ({
@@ -1955,7 +2312,7 @@
         const count = Number(state.emailQuota.count || 0);
         if (document.getElementById('aiQuotaText')) document.getElementById('aiQuotaText').innerText = `${count} / ${this.maxDaily}`;
         if (document.getElementById('aiQuotaBar')) document.getElementById('aiQuotaBar').style.width = `${Math.min(100, (count / this.maxDaily) * 100)}%`;
-        if (document.getElementById('aiQueueTotal')) document.getElementById('aiQueueTotal').innerText = q1 + q2 + q3;
+        if (document.getElementById('aiQueueTotal')) document.getElementById('aiQueueTotal').innerText = q1 + q2Count() + q3;
         if (document.getElementById('q1Count')) document.getElementById('q1Count').innerText = q1;
         if (document.getElementById('q2Count')) document.getElementById('q2Count').innerText = q2;
         if (document.getElementById('q3Count')) document.getElementById('q3Count').innerText = q3;
@@ -2003,9 +2360,8 @@
       const days = Number(window.promemoriaDays ?? 7);
       const reminderDays = Number.isFinite(days) && days > 0 ? days : 7;
       for (const reg of (state.registrations || [])) {
-        for (const field of ['passSentDate','promemoriaSentDate','presenzaSentDate','pergamenaSentDate','cancellationEmailStatus']) {
+        for (const field of ['passSentDate','presenzaSentDate','pergamenaSentDate','cancellationEmailStatus']) {
           const value = String(reg[field] || '');
-          if (field === 'promemoriaSentDate' && !openDayReminderWindowOpen()) continue;
           if (value.includes('IN_CODA')) return true;
           if (value.includes('ELABORAZIONE') && Number(reg.emailProcessingAt || 0) && now - Number(reg.emailProcessingAt) > 180000) return true;
         }
@@ -2014,21 +2370,13 @@
           const end = openDayEventEndPlusFive(reg);
           if (end && now >= end) return true;
         }
-        if (reg.promemoriaSentDate) continue;
-        const slot = state.dates.find(d => d.id === reg.dateId);
-        if (!slot?.date) continue;
-        const startTime = String(slot.timeSlot || '00:00').includes('-')
-          ? String(slot.timeSlot).split('-')[0].trim()
-          : String(slot.timeSlot || '00:00').trim();
-        const start = parseOpenDayLocalDate(slot.date, startTime);
-        const dueAt = openDayReminderDueAt(reg, slot, reminderDays);
-        if (start && start.getTime() > now && dueAt !== null && now >= dueAt) return true;
       }
       return false;
     }
 
     function q1Count() { return (state.registrations || []).filter(r => String(r.passSentDate || '').includes('IN_CODA')).length; }
-    function q2Count() { return (state.registrations || []).filter(r => String(r.promemoriaSentDate || '').includes('IN_CODA')).length; }
+    function q2Count() { return window.ReminderEngine ? window.ReminderEngine.pending().length :
+      (state.registrations || []).filter(r => String(r.promemoriaSentDate || '').includes('IN_CODA')).length; }
     function q3Count() { return (state.registrations || []).reduce((n, r) => n + ['presenzaSentDate', 'pergamenaSentDate', 'cancellationEmailStatus'].filter(f => String(r[f] || '').includes('IN_CODA')).length, 0); }
 
     async function sendPendingEmails() {
@@ -2137,7 +2485,9 @@
         throw new Error('Lo script promemoria accetta esclusivamente comunicazioni di tipo promemoria.');
 
       let quotaReservation = null;
-      if (url === MAIL_QUOTA_SCRIPT_URL || (url && url === getOpenDayReminderScriptUrl())) {
+      if (normalizedPayload.type === 'promemoria')
+        throw new Error('I promemoria vengono inviati soltanto tramite ReminderEngine, senza consumare la quota ordinaria.');
+      if (url === MAIL_QUOTA_SCRIPT_URL) {
         quotaReservation = await reserveOpenDayEmailQuotaSlot();
         if (!quotaReservation.reserved) {
           if (window.SmartEmailEngine) window.SmartEmailEngine.serverQuotaBlockedDate = quotaReservation.date;
@@ -2203,6 +2553,7 @@
       pergamena: { field: 'pergamenaSentDate', queuedAtField: 'pergamenaQueuedAt', url: ATTESTATO_USCITA_URL },
       cancellazione: { field: 'cancellationEmailStatus', queuedAtField: 'cancellationEmailQueuedAt', url: CANCEL_SCRIPT_URL }
     });
+    let openDayImmediateActive = false;
     async function dispatchOpenDayImmediateEmail(code, type) {
       const def = OPEN_DAY_IMMEDIATE_TYPES[type];
       if (!def || !code) return { submitted: false, reason: 'Tipo o codice non valido' };
@@ -2211,11 +2562,12 @@
       const startedAt = Date.now();
       // Evita che nello stesso browser il ciclo generale e quello immediato
       // utilizzino contemporaneamente il medesimo proprietario del lock.
-      while (engine.isProcessing && Date.now() - startedAt < 18000) {
+      while ((engine.isProcessing || window.ReminderEngine?.processing) && Date.now() - startedAt < 18000) {
         await new Promise(resolve => setTimeout(resolve, 150));
       }
-      if (engine.isProcessing) return { submitted: false, pending: true, reason: 'Motore già occupato' };
+      if (engine.isProcessing || window.ReminderEngine?.processing) return { submitted: false, pending: true, reason: 'Motore già occupato' };
       let lease = false;
+      openDayImmediateActive = true;
       try {
         lease = await acquireOpenDayEmailQueueLease(true, 12000);
         if (!lease) return { submitted: false, pending: true, reason: 'Un altro dispositivo sta gestendo la coda' };
@@ -2243,6 +2595,7 @@
         return { submitted: false, pending: true, reason: String(error?.message || error) };
       } finally {
         if (lease) await releaseOpenDayEmailQueueLease();
+        openDayImmediateActive = false;
       }
     }
     // Una sola comunicazione immediata per volta nello stesso browser.
@@ -2702,6 +3055,7 @@
           ensureOpenDayOperationalListeners();
           bindOpenDayRegistrationListener();
           window.SmartEmailEngine.start();
+          window.ReminderEngine.start();
         }
         else document.getElementById('sectionLogin').classList.remove('hidden'); 
       }
@@ -2727,7 +3081,7 @@
     window.toggleAdminPanel = toggleAdminPanel;
 
     function switchAdminTab(id) {
-      if (id === "tabSmartEmail") window.checkOpenDayBackgroundWorker?.(); ['tabRegistrations','tabLiveScanner','tabSettings','tabStatistics','tabAttendance','tabSmartEmail','tabWaitlist'].forEach(t => document.getElementById(t)?.classList.add('hidden')); ensureOpenDayWaitlistAdminUI(); document.getElementById(id)?.classList.remove('hidden'); if(id === 'tabWaitlist') renderOpenDayWaitlistAdmin(); if(id === 'tabStatistics') requestAnimationFrame(() => window.updateStatistics()); if (id === 'tabAttendance') requestAnimationFrame(() => window.renderOpenDayAttendance()); }
+      if (id === "tabSmartEmail") {window.checkOpenDayBackgroundWorker?.();window.ReminderEngine?.render();} ['tabRegistrations','tabLiveScanner','tabSettings','tabStatistics','tabAttendance','tabSmartEmail','tabWaitlist'].forEach(t => document.getElementById(t)?.classList.add('hidden')); ensureOpenDayWaitlistAdminUI(); document.getElementById(id)?.classList.remove('hidden'); if(id === 'tabWaitlist') renderOpenDayWaitlistAdmin(); if(id === 'tabStatistics') requestAnimationFrame(() => window.updateStatistics()); if (id === 'tabAttendance') requestAnimationFrame(() => window.renderOpenDayAttendance()); }
     window.switchAdminTab = switchAdminTab;
     
     function openRecoveryModal() { document.getElementById('recoveryModalFormView').classList.remove('hidden'); document.getElementById('recoveryModalSuccessView').classList.add('hidden'); document.getElementById('recoveryModal').classList.remove('hidden'); }
@@ -2760,6 +3114,10 @@
       const wasReady = openDayRegistrationsRealtimeReady;
       state.registrations = rows;
       openDayRegistrationsRealtimeReady = true;
+      // Il nuovo motore promemoria usa lo stesso registro, ma una coda distinta.
+      window.ReminderEngine?.render();
+      if (!wasReady && window.ReminderEngine?.timerId)
+        queueMicrotask(() => window.ReminderEngine.cycle().catch(error => console.warn('Controllo coda promemoria', error)));
       // Primo controllo immediato quando il listener completo diventa pronto.
       if (!wasReady && window.SmartEmailEngine?.timerId)
         queueMicrotask(() => window.SmartEmailEngine.processQueues().catch(error => console.warn('Controllo coda email', error)));
@@ -2847,7 +3205,9 @@
           const input = document.getElementById('settingsPromemoriaDays');
           if (input) input.value = days;
           window.promemoriaDays = days;
-          window.promemoriaScriptUrl = isValidOpenDayReminderScriptUrl(config.scriptUrl) ? String(config.scriptUrl).trim() : '';
+          // Migrazione automatica: non utilizzare il vecchio endpoint salvato nelle impostazioni.
+          window.promemoriaScriptUrl = Number(config.reminderEngineVersion || 0) >= 2 && isValidOpenDayReminderScriptUrl(config.scriptUrl)
+            ? String(config.scriptUrl).trim() : OPEN_DAY_REMINDER_DEFAULT_URL;
           const urlInput = document.getElementById('settingsPromemoriaScriptUrl');
           if (urlInput) urlInput.value = window.promemoriaScriptUrl;
           const status = document.getElementById('settingsPromemoriaScriptStatus');
@@ -3845,8 +4205,12 @@ Preferenza: ${openDayLiceoPreferenceLabel(regData)}` : regData.studyPath; docume
       const priority = (type === 'pass') ? 'Q1' : (type === 'promemoria' ? 'Q2' : 'Q3');
       const queuedAt = Date.now();
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registrations', code), { [fieldMap[type]]: `IN_CODA_${priority}`, [queuedAtMap[type]]: queuedAt, manualEmailRequestAt: queuedAt });
+      if (type === 'promemoria') Object.assign(record,{
+        promemoriaSentDate:'IN_CODA_Q2',promemoriaQueuedAt:queuedAt,manualEmailRequestAt:queuedAt
+      });
       showToast("Email accodata. Il motore la elaborerà in ordine.", "info");
-      await window.SmartEmailEngine.flushNow();
+      if (type === 'promemoria') await window.ReminderEngine.flushNow();
+      else await window.SmartEmailEngine.flushNow();
     }
     window.triggerEmailQueue = triggerEmailQueue;
 
@@ -3954,17 +4318,17 @@ Preferenza: ${openDayLiceoPreferenceLabel(regData)}` : regData.studyPath; docume
         return showToast('URL non valido o uguale allo script delle conferme. Serve il nuovo URL /exec.', 'error');
       try {
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'promemoria'),
-          { days, scriptUrl: url }, { merge: true });
+          { days, scriptUrl: url || OPEN_DAY_REMINDER_DEFAULT_URL, reminderEngineVersion: 2 }, { merge: true });
         window.promemoriaDays = days;
-        window.promemoriaScriptUrl = url;
+        window.promemoriaScriptUrl = url || OPEN_DAY_REMINDER_DEFAULT_URL;
         const status = document.getElementById('settingsPromemoriaScriptStatus');
         if (status) {
-          status.textContent = url ? 'Script promemoria dedicato configurato. Le richieste in coda verranno elaborate.' : 'Script promemoria non configurato: richieste conservate in coda.';
-          status.className = url ? 'text-[10px] text-emerald-700 font-bold leading-relaxed' : 'text-[10px] text-amber-700 font-bold leading-relaxed';
+          status.textContent = 'Script promemoria dedicato V2 configurato. Le richieste in coda verranno elaborate.';
+          status.className = 'text-[10px] text-emerald-700 font-bold leading-relaxed';
         }
         await window.reconcileScheduledOpenDayEmails();
-        await window.SmartEmailEngine.flushNow();
-        showToast(url ? 'Script promemoria separato salvato. Coda verificata.' : 'Giorni salvati: promemoria in coda fino alla configurazione dello script.', 'success');
+        await window.ReminderEngine.flushNow();
+        showToast('Script promemoria separato salvato. Coda verificata.', 'success');
       } catch (error) {
         console.error('Salvataggio configurazione promemoria', error);
         showToast('Impossibile salvare la configurazione: ' + String(error.message || error), 'error');
